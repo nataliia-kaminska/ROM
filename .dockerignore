@@ -1,0 +1,11 @@
+.git
+.pytest_cache
+.venv
+__pycache__
+*.pyc
+*.egg-info
+.env
+research_matcher.db
+migration_check.db
+.vs
+

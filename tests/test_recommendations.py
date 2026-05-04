@@ -120,3 +120,53 @@ def test_recommendations_use_profile_details_and_hide_ignored_status(client):
         good_opportunity["id"],
         ignored_opportunity["id"],
     }
+
+
+def test_recommendations_include_semantic_similarity_signal(client):
+    profile = client.post(
+        "/profiles",
+        json={
+            "full_name": "Marta Semeniv",
+            "career_stage": "postdoc",
+            "disciplines": ["Medicine"],
+            "keywords": ["clinical AI"],
+        },
+    ).json()
+    client.put(
+        f"/profiles/{profile['id']}/details",
+        json={
+            "research_summary": "Neural language models for emergency triage and clinical decision support.",
+            "publications": ["Transformer models for hospital emergency triage"],
+        },
+    )
+    related = client.post(
+        "/opportunities",
+        json={
+            "title": "Emergency Triage AI Fellowship",
+            "opportunity_type": "fellowship",
+            "source": "manual_seed",
+            "url": "https://example.org/triage-ai",
+            "summary": "Support for neural language models in hospital emergency triage workflows.",
+            "eligibility": "Open to researchers developing clinical decision support.",
+            "disciplines": ["Health Informatics"],
+            "keywords": ["decision support"],
+        },
+    ).json()
+    unrelated = client.post(
+        "/opportunities",
+        json={
+            "title": "Marine Robotics Training",
+            "opportunity_type": "training",
+            "source": "manual_seed",
+            "url": "https://example.org/marine-robotics",
+            "summary": "Field training for autonomous underwater navigation and marine robotics.",
+            "disciplines": ["Engineering"],
+            "keywords": ["robotics"],
+        },
+    ).json()
+
+    recommendations = client.get(f"/recommendations/{profile['id']}").json()
+
+    assert recommendations[0]["opportunity"]["id"] == related["id"]
+    assert recommendations[0]["semantic_score"] > recommendations[1]["semantic_score"]
+    assert any("Semantic similarity" in reason for reason in recommendations[0]["reasons"])

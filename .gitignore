@@ -7,3 +7,5 @@ __pycache__/
 research_matcher.db
 migration_check.db
 .vs/
+frontend/node_modules/
+frontend/dist/

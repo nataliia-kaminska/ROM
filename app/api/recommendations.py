@@ -41,15 +41,17 @@ def get_recommendations(
         ):
             continue
 
-        match_score, reasons = score_opportunity(profile, opportunity, details, status_record)
+        match_score, reasons, semantic_score = score_opportunity(profile, opportunity, details, status_record)
         if match_score >= min_score:
             recommendations.append(
                 RecommendationRead(
                     opportunity=_to_read(opportunity),
                     match_score=match_score,
+                    semantic_score=semantic_score,
                     reasons=reasons,
                     user_status=status_record.status.value if status_record else None,
                 )
             )
 
+    db.commit()
     return sorted(recommendations, key=lambda item: item.match_score, reverse=True)[offset : offset + limit]

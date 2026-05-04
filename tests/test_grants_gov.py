@@ -61,7 +61,7 @@ def test_grants_gov_ingestion_records_source_and_batch(client, monkeypatch):
                 }
             ]
 
-    monkeypatch.setattr("app.api.ingestion.GrantsGovClient", lambda: FakeGrantsGovClient())
+    monkeypatch.setattr("app.services.grants_gov_ingestion.GrantsGovClient", lambda: FakeGrantsGovClient())
 
     response = client.post(
         "/ingestion/grants-gov/search",

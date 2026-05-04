@@ -132,6 +132,20 @@ Run tests:
 python -m pytest
 ```
 
+Make shortcuts:
+
+```powershell
+make setup
+make backend
+make frontend
+make worker
+make scheduler
+make test
+make migrate
+make docker-up
+make docker-down
+```
+
 Run migrations:
 
 ```powershell
@@ -152,6 +166,23 @@ Open:
 - API: `http://127.0.0.1:8000`
 - PostgreSQL: `localhost:5432`
 - Redis: `localhost:6379`
+
+Docker Compose also starts:
+
+- `worker`: RQ worker for ingestion and reminder jobs;
+- `scheduler`: lightweight scheduler that periodically queues source sync and reminder scan jobs.
+
+Run a local worker against your local `.env` Redis/PostgreSQL configuration:
+
+```powershell
+python -m app.workers.worker
+```
+
+Run the local scheduler:
+
+```powershell
+python -m app.workers.scheduler
+```
 
 ## First API Flow
 
@@ -438,6 +469,18 @@ Core UI workflows:
 - create and complete reminders;
 - admin imports curated opportunity lists.
 
+Current Phase 4 status:
+
+- React + TypeScript frontend scaffold added under `frontend/`.
+- Sign in and sign up screens added with bearer token persistence.
+- Authenticated dashboard added with profile selection.
+- Profile creation, detail enrichment, and ORCID import screens added.
+- Opportunity feed added with recommendation scores, reasons, filters, detail drawer, and status actions.
+- Saved/planned/applied workflow board added.
+- Reminder creation and completion UI added.
+- Admin import UI added for Grants.gov search and curated bulk JSON imports.
+- API error and empty states added.
+
 ### Phase 5: Background Jobs
 
 Goal: remove long-running work from request/response APIs.
@@ -449,6 +492,18 @@ Goal: remove long-running work from request/response APIs.
 - Add reminder scan job.
 - Add email notification job.
 - Add failed-job retry behavior and admin visibility.
+
+Current Phase 5 status:
+
+- RQ dependency added for Redis-backed background jobs.
+- Shared Grants.gov ingestion service extracted for API and worker use.
+- `/jobs/ingestion/grants-gov` queues Grants.gov imports with retry behavior.
+- `/jobs/reminders/scan` queues due reminder scans.
+- Reminder email notification job stub added with logging and skip reasons.
+- `/jobs`, `/jobs/{job_id}`, and `/jobs/{job_id}/retry` expose queue visibility and failed-job retry support.
+- Docker Compose now runs separate `worker` and `scheduler` services.
+- Scheduler queues recurring Grants.gov source syncs and reminder scans based on environment settings.
+- Frontend admin screen can queue jobs, view queue stats, and inspect job details.
 
 ### Phase 6: AI and Semantic Matching
 
@@ -466,6 +521,19 @@ Goal: improve match quality beyond keyword overlap.
   - deadline urgency;
   - similarity to publications and research summary.
 - Add feedback loop from saved, ignored, and applied statuses.
+
+Current Phase 6 status:
+
+- Portable local embedding service added using deterministic text vectors.
+- Profile detail embeddings and opportunity embeddings are persisted.
+- Alembic migration `20260504_0004` adds embedding columns and enables PostgreSQL `vector` extension when available.
+- Recommendations now blend semantic similarity with deterministic eligibility and metadata scoring.
+- Recommendation responses include `semantic_score`.
+- Semantic explanations are included for moderate and strong profile/opportunity similarity.
+- Embedding refresh worker jobs added for profiles and opportunities.
+- `/jobs/embeddings/refresh` queues a full embedding backfill.
+- Frontend opportunity cards show semantic score and the admin screen can queue embedding refreshes.
+- Feedback from saved, planned, applied, and ignored statuses remains part of ranking/filtering.
 
 ### Phase 7: More Integrations
 
@@ -491,6 +559,17 @@ Profile sources:
 - LinkedIn as an optional profile link or limited OAuth integration;
 - Google Scholar as a user-provided URL, not as a scraped dependency.
 
+Current Phase 7 status:
+
+- Generic external opportunity source importer added for RSS and JSON feeds.
+- `/ingestion/external-source/import` normalizes EURAXESS/DAAD/Fulbright/Erasmus/MSCA-style feeds into the shared opportunity catalog.
+- External source imports create source freshness and batch audit records.
+- OpenAlex profile enrichment added through `/integrations/openalex/import`.
+- OpenAlex enrichment merges public concepts, works, funding interests, and profile detail summaries without overwriting user-entered data.
+- OpenAlex base URL is configurable through `OPENALEX_BASE_URL`.
+- Frontend admin screen can import external RSS/JSON opportunity feeds.
+- Frontend integration screen can enrich the active profile with OpenAlex by ORCID or OpenAlex author id.
+
 ### Phase 8: Notifications
 
 Goal: make the system proactive.
@@ -500,6 +579,16 @@ Goal: make the system proactive.
 - Alerts for new high-match opportunities.
 - Notification preferences per user.
 - Reminder history and unsubscribe controls.
+
+Current Phase 8 status:
+
+- Notification preferences table and API added.
+- Notification history table and API added.
+- Deadline reminder worker now records persistent notification history.
+- Deadline reminder email sends respect user notification preferences.
+- Notification read/unread and unsubscribe controls added.
+- Frontend notifications section added with preferences, history, mark-read, and unsubscribe actions.
+- Weekly digest and high-match alert preferences are stored for scheduled notification jobs.
 
 ### Phase 9: Admin and Operations
 
@@ -517,6 +606,16 @@ Goal: make data management sustainable.
   - source quality;
   - match score distribution.
 
+Current Phase 9 status:
+
+- Admin dashboard API added with source freshness, recent batches, failed batches, and analytics.
+- Admin audit log table and API added.
+- Manual opportunity editing API added with audit logging.
+- Duplicate opportunity detection and merge APIs added.
+- Merge tool reassigns statuses, reminders, and notifications before deleting duplicates.
+- Basic analytics added for saved opportunities, common disciplines, source quality, and totals.
+- Frontend admin operations panel added for dashboard, duplicates, analytics, and audit visibility.
+
 ### Phase 10: Application Assistant
 
 Goal: help researchers act on opportunities.
@@ -527,6 +626,14 @@ Goal: help researchers act on opportunities.
 - Suggest missing profile fields.
 - Warn about eligibility gaps.
 - Export application notes.
+
+Current Phase 10 status:
+
+- Application assistant service added.
+- `/application-assistant` generates an application checklist, motivation letter outline, research fit statement, missing profile field suggestions, eligibility warnings, and exportable notes.
+- Assistant uses profile details, opportunity metadata, deadlines, countries, career stage, and unavailable countries.
+- Frontend application assistant tab added.
+- Exportable Markdown-style notes are displayed in the app for application prep.
 
 ## Database Plan
 

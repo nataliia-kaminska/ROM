@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 
-from app.api import auth, ingestion, opportunities, orcid, profiles, recommendations, reminders, sources, statuses
+from app.api import admin, application_assistant, auth, ingestion, jobs, notifications, openalex, opportunities, orcid, profiles, recommendations, reminders, sources, statuses
 from app.core.config import settings
 from app.core.logging import configure_logging
 from app.db.session import Base, engine
@@ -51,9 +51,14 @@ app.include_router(auth.router)
 app.include_router(profiles.router)
 app.include_router(opportunities.router)
 app.include_router(recommendations.router)
+app.include_router(notifications.router)
+app.include_router(admin.router)
+app.include_router(application_assistant.router)
 app.include_router(ingestion.router)
+app.include_router(jobs.router)
 app.include_router(statuses.router)
 app.include_router(orcid.router)
+app.include_router(openalex.router)
 app.include_router(reminders.router)
 app.include_router(sources.router)
 

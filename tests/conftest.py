@@ -17,6 +17,7 @@ def client() -> TestClient:
     )
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
+    app.state.testing_session_factory = TestingSessionLocal
 
     def override_get_db():
         db: Session = TestingSessionLocal()
@@ -30,4 +31,5 @@ def client() -> TestClient:
         yield TestClient(app)
     finally:
         app.dependency_overrides.clear()
-
+        if hasattr(app.state, "testing_session_factory"):
+            delattr(app.state, "testing_session_factory")

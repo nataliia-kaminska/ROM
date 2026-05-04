@@ -8,6 +8,8 @@ from app.db.models import (
     ResearcherProfile,
     ResearcherProfileDetails,
 )
+from app.core.config import settings
+from app.services.embeddings import cosine_similarity, ensure_opportunity_embedding, ensure_profile_embedding
 from app.services.serialization import normalize_terms, unpack_list
 
 
@@ -16,7 +18,7 @@ def score_opportunity(
     opportunity: Opportunity,
     details: ResearcherProfileDetails | None = None,
     profile_status: ProfileOpportunityStatus | None = None,
-) -> tuple[int, list[str]]:
+) -> tuple[int, list[str], int]:
     score = 0
     reasons: list[str] = []
 
@@ -57,6 +59,10 @@ def score_opportunity(
     if details:
         score = _score_details(score, reasons, details, opportunity, opportunity_countries)
 
+    semantic_score = _semantic_score(profile, opportunity, details, reasons)
+    if semantic_score:
+        score += round((semantic_score / 100) * settings.semantic_score_weight)
+
     if opportunity.deadline:
         days_left = (opportunity.deadline - date.today()).days
         if days_left >= 0:
@@ -77,7 +83,24 @@ def score_opportunity(
     if not reasons:
         reasons.append("Low metadata overlap; review manually")
 
-    return max(0, min(100, score)), reasons
+    return max(0, min(100, score)), reasons, semantic_score
+
+
+def _semantic_score(
+    profile: ResearcherProfile,
+    opportunity: Opportunity,
+    details: ResearcherProfileDetails | None,
+    reasons: list[str],
+) -> int:
+    profile_vector = ensure_profile_embedding(profile, details)
+    opportunity_vector = ensure_opportunity_embedding(opportunity)
+    similarity = cosine_similarity(profile_vector, opportunity_vector)
+    semantic_score = max(0, min(100, round(similarity * 100)))
+    if semantic_score >= 55:
+        reasons.append(f"Semantic similarity to your profile is strong ({semantic_score}%)")
+    elif semantic_score >= 30:
+        reasons.append(f"Semantic similarity to your profile is moderate ({semantic_score}%)")
+    return semantic_score
 
 
 def _score_details(

@@ -52,6 +52,19 @@ class UserRole(str, Enum):
     admin = "admin"
 
 
+class NotificationStatus(str, Enum):
+    pending = "pending"
+    sent = "sent"
+    skipped = "skipped"
+    read = "read"
+
+
+class NotificationType(str, Enum):
+    deadline_reminder = "deadline_reminder"
+    weekly_digest = "weekly_digest"
+    high_match_alert = "high_match_alert"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -96,6 +109,8 @@ class ResearcherProfileDetails(Base):
     preferred_opportunity_types: Mapped[str] = mapped_column(Text, default="")
     min_duration_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_duration_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    profile_embedding: Mapped[str] = mapped_column(Text, default="")
+    embedding_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
@@ -115,6 +130,8 @@ class Opportunity(Base):
     countries: Mapped[str] = mapped_column(Text, default="")
     career_stages: Mapped[str] = mapped_column(Text, default="")
     deadline: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    opportunity_embedding: Mapped[str] = mapped_column(Text, default="")
+    embedding_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
@@ -180,3 +197,48 @@ class OpportunityReminder(Base):
     status: Mapped[ReminderStatus] = mapped_column(SqlEnum(ReminderStatus), default=ReminderStatus.pending, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class NotificationPreference(Base):
+    __tablename__ = "notification_preferences"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_notification_preferences_user"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    email_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    deadline_reminders_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    weekly_digest_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    high_match_alerts_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    min_alert_score: Mapped[int] = mapped_column(Integer, default=80)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    profile_id: Mapped[int | None] = mapped_column(ForeignKey("researcher_profiles.id"), nullable=True, index=True)
+    opportunity_id: Mapped[int | None] = mapped_column(ForeignKey("opportunities.id"), nullable=True, index=True)
+    reminder_id: Mapped[int | None] = mapped_column(ForeignKey("opportunity_reminders.id"), nullable=True, index=True)
+    notification_type: Mapped[NotificationType] = mapped_column(SqlEnum(NotificationType), index=True)
+    channel: Mapped[str] = mapped_column(String(40), default="email", index=True)
+    subject: Mapped[str] = mapped_column(String(300))
+    body: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[NotificationStatus] = mapped_column(SqlEnum(NotificationStatus), default=NotificationStatus.pending, index=True)
+    skip_reason: Mapped[str] = mapped_column(String(200), default="")
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+
+
+class AdminAuditLog(Base):
+    __tablename__ = "admin_audit_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    action: Mapped[str] = mapped_column(String(120), index=True)
+    entity_type: Mapped[str] = mapped_column(String(120), index=True)
+    entity_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    message: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)

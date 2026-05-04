@@ -13,7 +13,13 @@ class Settings(BaseSettings):
     scheduled_grants_gov_keywords: list[str] = ["research", "fellowship"]
     reminder_scan_interval_seconds: int = 3600
     embedding_dimensions: int = 128
-    semantic_score_weight: int = 25
+    embedding_provider: str = "hash"
+    embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+    semantic_candidate_limit: int = 250
+    semantic_score_weight: float = 0.35
+    eligibility_score_weight: float = 0.35
+    deadline_score_weight: float = 0.15
+    user_history_score_weight: float = 0.15
     auto_create_tables: bool = True
     cors_origins: list[str] = ["http://127.0.0.1:3000", "http://localhost:3000"]
     log_level: str = "INFO"

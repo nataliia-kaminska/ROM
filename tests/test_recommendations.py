@@ -42,11 +42,12 @@ def test_profile_opportunity_recommendation_flow(client):
 
     assert recommendations_response.status_code == 200
     recommendations = recommendations_response.json()
-    assert recommendations[0]["match_score"] >= 90
+    assert recommendations[0]["match_score"] >= 70
+    assert recommendations[0]["score_breakdown"]["eligibility"] >= 80
     assert "AI for Genomics Exchange Fellowship" == recommendations[0]["opportunity"]["title"]
     assert recommendations[0]["reasons"]
 
-    paged_response = client.get(f"/recommendations/{profile_id}", params={"min_score": 90, "limit": 1})
+    paged_response = client.get(f"/recommendations/{profile_id}", params={"min_score": 70, "limit": 1})
 
     assert paged_response.status_code == 200
     assert len(paged_response.json()) == 1
@@ -111,7 +112,7 @@ def test_recommendations_use_profile_details_and_hide_ignored_status(client):
     recommendations = client.get(f"/recommendations/{profile_id}").json()
 
     assert [item["opportunity"]["id"] for item in recommendations] == [good_opportunity["id"]]
-    assert recommendations[0]["match_score"] >= 80
+    assert recommendations[0]["match_score"] >= 60
     assert any("preferred opportunity type" in reason for reason in recommendations[0]["reasons"])
 
     recommendations_with_ignored = client.get(f"/recommendations/{profile_id}?include_ignored=true").json()
@@ -170,3 +171,69 @@ def test_recommendations_include_semantic_similarity_signal(client):
     assert recommendations[0]["opportunity"]["id"] == related["id"]
     assert recommendations[0]["semantic_score"] > recommendations[1]["semantic_score"]
     assert any("Semantic similarity" in reason for reason in recommendations[0]["reasons"])
+
+
+def test_recommendations_adapt_to_user_feedback_history(client):
+    profile = client.post(
+        "/profiles",
+        json={
+            "full_name": "Feedback User",
+            "career_stage": "phd",
+            "disciplines": ["Computer Science"],
+            "keywords": ["machine learning"],
+        },
+    ).json()
+    saved_seed = client.post(
+        "/opportunities",
+        json={
+            "title": "Saved AI Seed",
+            "opportunity_type": "grant",
+            "source": "manual_seed",
+            "url": "https://example.org/saved-ai-seed",
+            "keywords": ["machine learning", "robotics"],
+            "countries": ["Germany"],
+        },
+    ).json()
+    ignored_seed = client.post(
+        "/opportunities",
+        json={
+            "title": "Ignored Marine Seed",
+            "opportunity_type": "training",
+            "source": "manual_seed",
+            "url": "https://example.org/ignored-marine-seed",
+            "keywords": ["marine robotics"],
+            "countries": ["United States"],
+        },
+    ).json()
+    positive_candidate = client.post(
+        "/opportunities",
+        json={
+            "title": "Robotics AI Grant",
+            "opportunity_type": "grant",
+            "source": "manual_seed",
+            "url": "https://example.org/robotics-ai-grant",
+            "keywords": ["robotics"],
+            "countries": ["Germany"],
+        },
+    ).json()
+    ignored_candidate = client.post(
+        "/opportunities",
+        json={
+            "title": "Marine Robotics Training",
+            "opportunity_type": "training",
+            "source": "manual_seed",
+            "url": "https://example.org/marine-robotics-training",
+            "keywords": ["marine robotics"],
+            "countries": ["United States"],
+        },
+    ).json()
+
+    client.put(f"/profiles/{profile['id']}/opportunities/{saved_seed['id']}/status", json={"status": "saved"})
+    client.put(f"/profiles/{profile['id']}/opportunities/{ignored_seed['id']}/status", json={"status": "ignored"})
+
+    recommendations = client.get(f"/recommendations/{profile['id']}", params={"include_ignored": True}).json()
+    by_id = {item["opportunity"]["id"]: item for item in recommendations}
+
+    assert by_id[positive_candidate["id"]]["score_breakdown"]["user_history"] > by_id[ignored_candidate["id"]]["score_breakdown"]["user_history"]
+    assert any("Ranks higher" in reason for reason in by_id[positive_candidate["id"]]["reasons"])
+    assert any("Ranks lower" in reason for reason in by_id[ignored_candidate["id"]]["reasons"])

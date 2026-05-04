@@ -3,6 +3,8 @@ import json
 import math
 import re
 from datetime import datetime
+from functools import lru_cache
+from typing import Protocol
 
 from app.core.config import settings
 from app.db.models import Opportunity, ResearcherProfile, ResearcherProfileDetails
@@ -25,6 +27,60 @@ STOP_WORDS = {
     "with",
     "your",
 }
+
+
+class EmbeddingProvider(Protocol):
+    name: str
+    model_name: str
+    dimensions: int
+
+    def embed(self, text: str) -> list[float]:
+        ...
+
+
+class HashEmbeddingProvider:
+    name = "hash"
+
+    def __init__(self, dimensions: int) -> None:
+        self.dimensions = dimensions
+        self.model_name = f"hash-{dimensions}"
+
+    def embed(self, text: str) -> list[float]:
+        vector = [0.0] * self.dimensions
+        for term in _terms(text):
+            digest = hashlib.sha256(term.encode("utf-8")).digest()
+            index = int.from_bytes(digest[:4], "big") % self.dimensions
+            sign = 1.0 if digest[4] % 2 == 0 else -1.0
+            vector[index] += sign
+        return _normalize(vector)
+
+
+class SentenceTransformerEmbeddingProvider:
+    name = "sentence_transformers"
+
+    def __init__(self, model_name: str) -> None:
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as exc:
+            raise RuntimeError(
+                "sentence-transformers is not installed. Install with `pip install -e .[embeddings]` "
+                "or set EMBEDDING_PROVIDER=hash."
+            ) from exc
+        self.model_name = model_name
+        self.model = SentenceTransformer(model_name)
+        self.dimensions = int(self.model.get_sentence_embedding_dimension())
+
+    def embed(self, text: str) -> list[float]:
+        vector = self.model.encode(text or "", normalize_embeddings=True)
+        return [float(value) for value in vector]
+
+
+@lru_cache(maxsize=1)
+def get_embedding_provider() -> EmbeddingProvider:
+    provider = settings.embedding_provider.lower().strip()
+    if provider in {"sentence_transformers", "local_model", "local"}:
+        return SentenceTransformerEmbeddingProvider(settings.embedding_model_name)
+    return HashEmbeddingProvider(settings.embedding_dimensions)
 
 
 def profile_embedding_text(profile: ResearcherProfile, details: ResearcherProfileDetails | None = None) -> str:
@@ -67,14 +123,9 @@ def opportunity_embedding_text(opportunity: Opportunity) -> str:
 
 
 def embed_text(text: str, dimensions: int | None = None) -> list[float]:
-    size = dimensions or settings.embedding_dimensions
-    vector = [0.0] * size
-    for term in _terms(text):
-        digest = hashlib.sha256(term.encode("utf-8")).digest()
-        index = int.from_bytes(digest[:4], "big") % size
-        sign = 1.0 if digest[4] % 2 == 0 else -1.0
-        vector[index] += sign
-    return _normalize(vector)
+    if dimensions is not None:
+        return HashEmbeddingProvider(dimensions).embed(text)
+    return get_embedding_provider().embed(text)
 
 
 def serialize_embedding(vector: list[float]) -> str:
@@ -100,25 +151,33 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
 
 
 def ensure_profile_embedding(profile: ResearcherProfile, details: ResearcherProfileDetails | None) -> list[float]:
+    provider = get_embedding_provider()
     if details is None:
         return embed_text(profile_embedding_text(profile))
     existing = deserialize_embedding(details.profile_embedding)
-    if existing:
+    if existing and details.embedding_model == provider.model_name:
         return existing
     vector = embed_text(profile_embedding_text(profile, details))
     details.profile_embedding = serialize_embedding(vector)
+    details.embedding_model = provider.model_name
     details.embedding_updated_at = datetime.utcnow()
     return vector
 
 
 def ensure_opportunity_embedding(opportunity: Opportunity) -> list[float]:
+    provider = get_embedding_provider()
     existing = deserialize_embedding(opportunity.opportunity_embedding)
-    if existing:
+    if existing and opportunity.embedding_model == provider.model_name:
         return existing
     vector = embed_text(opportunity_embedding_text(opportunity))
     opportunity.opportunity_embedding = serialize_embedding(vector)
+    opportunity.embedding_model = provider.model_name
     opportunity.embedding_updated_at = datetime.utcnow()
     return vector
+
+
+def vector_literal(vector: list[float]) -> str:
+    return "[" + ",".join(f"{value:.8f}" for value in vector) + "]"
 
 
 def _terms(text: str) -> list[str]:

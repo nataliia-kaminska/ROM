@@ -2,11 +2,12 @@ import logging
 from datetime import date
 
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.db.models import Opportunity, OpportunityReminder, ReminderStatus, ResearcherProfile, User
 from app.db.models import ResearcherProfileDetails
 from app.db.session import SessionLocal
-from app.services.embeddings import ensure_opportunity_embedding, ensure_profile_embedding
+from app.services.embeddings import ensure_opportunity_embedding, ensure_profile_embedding, vector_literal
 from app.services.grants_gov_ingestion import ingest_grants_gov
 from app.services.notifications import (
     create_deadline_notification,
@@ -83,7 +84,16 @@ def refresh_opportunity_embeddings_job() -> dict:
         opportunities = db.query(Opportunity).all()
         for opportunity in opportunities:
             opportunity.opportunity_embedding = ""
-            ensure_opportunity_embedding(opportunity)
+            vector = ensure_opportunity_embedding(opportunity)
+            if db.bind and db.bind.dialect.name == "postgresql":
+                db.execute(
+                    text(
+                        "UPDATE opportunities "
+                        "SET opportunity_embedding_vector = CAST(:vector AS vector) "
+                        "WHERE id = :id"
+                    ),
+                    {"vector": vector_literal(vector), "id": opportunity.id},
+                )
         db.commit()
         return {"opportunity_count": len(opportunities)}
     finally:
@@ -100,7 +110,16 @@ def refresh_profile_embeddings_job() -> dict:
             if profile is None:
                 continue
             details.profile_embedding = ""
-            ensure_profile_embedding(profile, details)
+            vector = ensure_profile_embedding(profile, details)
+            if db.bind and db.bind.dialect.name == "postgresql":
+                db.execute(
+                    text(
+                        "UPDATE researcher_profile_details "
+                        "SET profile_embedding_vector = CAST(:vector AS vector) "
+                        "WHERE id = :id"
+                    ),
+                    {"vector": vector_literal(vector), "id": details.id},
+                )
             refreshed += 1
         db.commit()
         return {"profile_count": refreshed}

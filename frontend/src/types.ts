@@ -66,6 +66,13 @@ export type Recommendation = {
   opportunity: Opportunity;
   match_score: number;
   semantic_score: number;
+  score_breakdown: {
+    semantic: number;
+    eligibility: number;
+    deadline: number;
+    user_history: number;
+    final: number;
+  };
   reasons: string[];
   user_status: OpportunityStatus | null;
 };

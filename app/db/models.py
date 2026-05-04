@@ -110,6 +110,7 @@ class ResearcherProfileDetails(Base):
     min_duration_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_duration_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
     profile_embedding: Mapped[str] = mapped_column(Text, default="")
+    embedding_model: Mapped[str] = mapped_column(String(200), default="")
     embedding_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -131,6 +132,7 @@ class Opportunity(Base):
     career_stages: Mapped[str] = mapped_column(Text, default="")
     deadline: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     opportunity_embedding: Mapped[str] = mapped_column(Text, default="")
+    embedding_model: Mapped[str] = mapped_column(String(200), default="")
     embedding_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 

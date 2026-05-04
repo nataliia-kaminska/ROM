@@ -777,7 +777,7 @@ function App() {
               </button>
             </div>
             <div className="cards">
-              {(activeProfile ? recommendations : opportunities.map((opportunity) => ({ opportunity, match_score: 0, semantic_score: 0, reasons: [], user_status: null }))).map(
+              {(activeProfile ? recommendations : opportunities.map((opportunity) => ({ opportunity, match_score: 0, semantic_score: 0, score_breakdown: { semantic: 0, eligibility: 0, deadline: 0, user_history: 0, final: 0 }, reasons: [], user_status: null }))).map(
                 (item) => (
                   <OpportunityCard
                     key={item.opportunity.id}
@@ -1174,7 +1174,7 @@ function OpportunityCard({
   onSelect,
   onStatus,
 }: {
-  item: Pick<Recommendation, "opportunity" | "match_score" | "semantic_score" | "reasons" | "user_status">;
+  item: Pick<Recommendation, "opportunity" | "match_score" | "semantic_score" | "score_breakdown" | "reasons" | "user_status">;
   onSelect: () => void;
   onStatus: (status: OpportunityStatus) => void;
 }) {
@@ -1192,6 +1192,14 @@ function OpportunityCard({
         <span>{item.opportunity.source}</span>
         {item.user_status && <span>{label(item.user_status)}</span>}
       </div>
+      {item.match_score > 0 && (
+        <div className="score-grid">
+          <span>Semantic {item.score_breakdown.semantic}</span>
+          <span>Eligibility {item.score_breakdown.eligibility}</span>
+          <span>Deadline {item.score_breakdown.deadline}</span>
+          <span>History {item.score_breakdown.user_history}</span>
+        </div>
+      )}
       {item.reasons.length > 0 && (
         <ul className="reasons">
           {item.reasons.slice(0, 3).map((reason) => (

@@ -132,6 +132,20 @@ Run tests:
 python -m pytest
 ```
 
+## Algorithm Description
+
+Recommendations use a hybrid ranking model. The backend computes separate score components for semantic similarity, eligibility fit, deadline urgency, and user history. The final score is a weighted blend:
+
+```text
+final_score =
+  w_semantic * semantic_score +
+  w_eligibility * eligibility_score +
+  w_deadline * deadline_score +
+  w_history * user_history_score
+```
+
+Semantic embeddings use a provider abstraction. Local/test mode uses deterministic hash embeddings. V1-ready mode can use a local `sentence-transformers` model and PostgreSQL `pgvector` for nearest-neighbor candidate retrieval. User feedback from saved, planned, applied, accepted, and ignored statuses adjusts the history component and appears in recommendation explanations.
+
 Make shortcuts:
 
 ```powershell

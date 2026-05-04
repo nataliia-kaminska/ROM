@@ -21,6 +21,9 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
 ]
+embeddings = [
+    "sentence-transformers>=3.0.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

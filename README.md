@@ -600,9 +600,13 @@ Current Phase 8 status:
 - Notification history table and API added.
 - Deadline reminder worker now records persistent notification history.
 - Deadline reminder email sends respect user notification preferences.
+- Email provider abstraction added with local console delivery and SMTP delivery.
+- Notification history stores provider, recipient, provider message id, attempt count, and last error.
+- Weekly digest and high-match alert worker jobs added.
+- Scheduler can enqueue weekly digest and high-match alert jobs.
 - Notification read/unread and unsubscribe controls added.
 - Frontend notifications section added with preferences, history, mark-read, and unsubscribe actions.
-- Weekly digest and high-match alert preferences are stored for scheduled notification jobs.
+- Weekly digest and high-match alert preferences are used by scheduled notification jobs.
 
 ### Phase 9: Admin and Operations
 

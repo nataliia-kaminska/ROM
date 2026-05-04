@@ -228,6 +228,14 @@ Acceptance criteria:
 - Production config can use SMTP or provider API.
 - Notification status reflects delivery success/failure.
 
+Status:
+
+- Email provider abstraction added.
+- `console` provider is the default for local/dev.
+- SMTP provider is available through environment configuration.
+- Notifications persist recipient, provider, provider message id, delivery attempts, and last error.
+- Delivery failures keep notifications pending and record the provider error.
+
 ### 3.2 Weekly Digest and High-Match Alerts
 
 Use stored preferences from Phase 8.
@@ -244,6 +252,15 @@ Acceptance criteria:
 - Users can enable/disable each notification type.
 - Notification history shows digest/alert records.
 - Worker tests cover enabled, disabled, and no-matches cases.
+
+Status:
+
+- Weekly digest worker job added.
+- High-match alert worker job added.
+- Scheduler enqueues digest and alert jobs based on configurable intervals.
+- Manual job endpoints added for digest and high-match alerts.
+- Frontend admin operations can queue digest and alert jobs.
+- Tests cover digest creation, high-match alert creation, and delivery failure recording.
 
 ## Milestone 4: Admin Security and API Professionalization
 

@@ -6,7 +6,7 @@ from rq import Retry
 from app.core.config import settings
 from app.core.logging import configure_logging
 from app.core.redis import get_redis_connection
-from app.workers.jobs import ingest_grants_gov_job, scan_due_reminders_job
+from app.workers.jobs import ingest_grants_gov_job, scan_due_reminders_job, send_high_match_alerts_job, send_weekly_digest_job
 from app.workers.queues import INGESTION_QUEUE, REMINDERS_QUEUE, get_queue
 
 
@@ -38,6 +38,24 @@ def enqueue_recurring_jobs() -> None:
             description="Scan due opportunity reminders",
         )
         logger.info("enqueued due reminder scan")
+
+    if redis.set("scheduler:notifications:weekly-digest", "1", ex=settings.weekly_digest_interval_seconds, nx=True):
+        reminders_queue.enqueue(
+            send_weekly_digest_job,
+            retry=Retry(max=3, interval=[60, 300, 900]),
+            job_timeout="10m",
+            description="Send weekly recommendation digest",
+        )
+        logger.info("enqueued weekly recommendation digest")
+
+    if redis.set("scheduler:notifications:high-match-alerts", "1", ex=settings.high_match_alert_interval_seconds, nx=True):
+        reminders_queue.enqueue(
+            send_high_match_alerts_job,
+            retry=Retry(max=3, interval=[60, 300, 900]),
+            job_timeout="10m",
+            description="Send high-match opportunity alerts",
+        )
+        logger.info("enqueued high-match alerts")
 
 
 def main() -> None:

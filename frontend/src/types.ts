@@ -117,6 +117,11 @@ export type NotificationItem = {
   body: string;
   status: string;
   skip_reason: string;
+  recipient: string;
+  provider: string;
+  provider_message_id: string;
+  delivery_attempts: number;
+  last_error: string;
   created_at: string;
   sent_at: string | null;
 };

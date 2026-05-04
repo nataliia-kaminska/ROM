@@ -6,7 +6,13 @@ from rq.registry import DeferredJobRegistry, FailedJobRegistry, FinishedJobRegis
 
 from app.schemas.ingestion import GrantsGovSearchRequest
 from app.schemas.jobs import JobEnqueueRead, JobRead, QueueStatsRead
-from app.workers.jobs import ingest_grants_gov_job, refresh_all_embeddings_job, scan_due_reminders_job
+from app.workers.jobs import (
+    ingest_grants_gov_job,
+    refresh_all_embeddings_job,
+    scan_due_reminders_job,
+    send_high_match_alerts_job,
+    send_weekly_digest_job,
+)
 from app.workers.queues import EMBEDDINGS_QUEUE, INGESTION_QUEUE, QUEUE_NAMES, REMINDERS_QUEUE, get_queue
 
 
@@ -57,6 +63,36 @@ def enqueue_reminder_scan() -> JobEnqueueRead:
             retry=Retry(max=3, interval=[60, 300, 900]),
             job_timeout="5m",
             description="Scan due opportunity reminders",
+        )
+        return JobEnqueueRead(job_id=job.id, queue=queue.name, status=job.get_status(refresh=True))
+    except RedisError as exc:
+        raise _queue_unavailable(exc) from exc
+
+
+@router.post("/notifications/weekly-digest", response_model=JobEnqueueRead, status_code=status.HTTP_202_ACCEPTED)
+def enqueue_weekly_digest() -> JobEnqueueRead:
+    try:
+        queue = get_queue(REMINDERS_QUEUE)
+        job = queue.enqueue(
+            send_weekly_digest_job,
+            retry=Retry(max=3, interval=[60, 300, 900]),
+            job_timeout="10m",
+            description="Send weekly recommendation digest",
+        )
+        return JobEnqueueRead(job_id=job.id, queue=queue.name, status=job.get_status(refresh=True))
+    except RedisError as exc:
+        raise _queue_unavailable(exc) from exc
+
+
+@router.post("/notifications/high-match-alerts", response_model=JobEnqueueRead, status_code=status.HTTP_202_ACCEPTED)
+def enqueue_high_match_alerts() -> JobEnqueueRead:
+    try:
+        queue = get_queue(REMINDERS_QUEUE)
+        job = queue.enqueue(
+            send_high_match_alerts_job,
+            retry=Retry(max=3, interval=[60, 300, 900]),
+            job_timeout="10m",
+            description="Send high-match opportunity alerts",
         )
         return JobEnqueueRead(job_id=job.id, queue=queue.name, status=job.get_status(refresh=True))
     except RedisError as exc:

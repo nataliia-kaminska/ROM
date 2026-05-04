@@ -37,6 +37,7 @@ def create_deadline_notification(
         opportunity_id=reminder.opportunity_id,
         reminder_id=reminder.id,
         notification_type=NotificationType.deadline_reminder,
+        recipient=profile.email if profile and profile.email else "",
         subject=subject,
         body=reminder.message or subject,
     )
@@ -57,6 +58,46 @@ def mark_notification_skipped(notification: Notification, reason: str) -> Notifi
     return notification
 
 
+def mark_notification_delivery_attempt(
+    notification: Notification,
+    provider: str,
+    recipient: str,
+    message_id: str = "",
+    error: str = "",
+) -> Notification:
+    notification.provider = provider
+    notification.recipient = recipient
+    notification.provider_message_id = message_id
+    notification.delivery_attempts += 1
+    notification.last_error = error
+    if error:
+        notification.status = NotificationStatus.pending
+    else:
+        mark_notification_sent(notification)
+    return notification
+
+
+def create_digest_notification(
+    db: Session,
+    user: User,
+    profile: ResearcherProfile | None,
+    subject: str,
+    body: str,
+    notification_type: NotificationType,
+) -> Notification:
+    notification = Notification(
+        user_id=user.id,
+        profile_id=profile.id if profile else None,
+        notification_type=notification_type,
+        recipient=user.email,
+        subject=subject,
+        body=body,
+    )
+    db.add(notification)
+    db.flush()
+    return notification
+
+
 def mark_notification_read(notification: Notification) -> Notification:
     notification.status = NotificationStatus.read
     notification.read_at = datetime.utcnow()
@@ -67,3 +108,15 @@ def preferences_allow_deadline_email(preferences: NotificationPreference | None)
     if preferences is None:
         return True
     return preferences.email_enabled and preferences.deadline_reminders_enabled
+
+
+def preferences_allow_digest_email(preferences: NotificationPreference | None) -> bool:
+    if preferences is None:
+        return True
+    return preferences.email_enabled and preferences.weekly_digest_enabled
+
+
+def preferences_allow_high_match_email(preferences: NotificationPreference | None) -> bool:
+    if preferences is None:
+        return True
+    return preferences.email_enabled and preferences.high_match_alerts_enabled

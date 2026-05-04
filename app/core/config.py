@@ -28,6 +28,15 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     orcid_base_url: str = "https://pub.orcid.org/v3.0"
     openalex_base_url: str = "https://api.openalex.org"
+    email_provider: str = "console"
+    email_from: str = "Research Matcher <noreply@example.local>"
+    smtp_host: str = "localhost"
+    smtp_port: int = 1025
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_use_tls: bool = False
+    weekly_digest_interval_seconds: int = 604800
+    high_match_alert_interval_seconds: int = 3600
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

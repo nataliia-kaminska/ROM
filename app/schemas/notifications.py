@@ -34,6 +34,11 @@ class NotificationRead(BaseModel):
     reminder_id: int | None
     notification_type: NotificationType
     channel: str
+    recipient: str
+    provider: str
+    provider_message_id: str
+    delivery_attempts: int
+    last_error: str
     subject: str
     body: str
     status: NotificationStatus

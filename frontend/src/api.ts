@@ -161,6 +161,8 @@ export const api = {
   enqueueGrantsGov: (body: { keyword: string; limit: number; import_results: boolean }) =>
     request<JobSummary>("/jobs/ingestion/grants-gov", { method: "POST", body }),
   enqueueReminderScan: () => request<JobSummary>("/jobs/reminders/scan", { method: "POST" }),
+  enqueueWeeklyDigest: () => request<JobSummary>("/jobs/notifications/weekly-digest", { method: "POST" }),
+  enqueueHighMatchAlerts: () => request<JobSummary>("/jobs/notifications/high-match-alerts", { method: "POST" }),
   enqueueEmbeddingRefresh: () => request<JobSummary>("/jobs/embeddings/refresh", { method: "POST" }),
   queues: () => request<QueueStats[]>("/jobs"),
   job: (jobId: string, queueName?: string) => request<Record<string, unknown>>(`/jobs/${jobId}`, { query: { queue_name: queueName } }),

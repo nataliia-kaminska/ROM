@@ -1088,6 +1088,12 @@ function App() {
                   <button className="secondary" onClick={() => void enqueueReminderScan()}>
                     Queue reminder scan
                   </button>
+                  <button className="secondary" onClick={() => void api.enqueueWeeklyDigest().then((job) => { setJobForm({ job_id: job.job_id, queue_name: job.queue }); setNotice(`Queued weekly digest ${job.job_id}`); void loadQueues(); }).catch((err) => setError((err as Error).message))}>
+                    Queue digest
+                  </button>
+                  <button className="secondary" onClick={() => void api.enqueueHighMatchAlerts().then((job) => { setJobForm({ job_id: job.job_id, queue_name: job.queue }); setNotice(`Queued high-match alerts ${job.job_id}`); void loadQueues(); }).catch((err) => setError((err as Error).message))}>
+                    Queue alerts
+                  </button>
                   <button className="secondary" onClick={() => void enqueueEmbeddingRefresh()}>
                     Refresh embeddings
                   </button>

@@ -2,6 +2,7 @@ from datetime import date
 
 from app.db.models import Opportunity, ResearcherProfile, ResearcherProfileDetails
 from app.schemas.application_assistant import ApplicationAssistantRead
+from app.services.requirements import build_gap_analysis, extract_opportunity_requirements
 from app.services.serialization import unpack_list
 
 
@@ -12,10 +13,11 @@ def build_application_assistant(
 ) -> ApplicationAssistantRead:
     missing_fields = _missing_fields(profile, details)
     warnings = _eligibility_warnings(profile, opportunity, details)
+    gaps = build_gap_analysis(profile, opportunity, details)
     checklist = _checklist(opportunity, warnings)
     outline = _motivation_outline(profile, opportunity)
     fit_statement = _fit_statement(profile, opportunity, details)
-    notes = _export_notes(profile, opportunity, checklist, outline, fit_statement, missing_fields, warnings)
+    notes = _export_notes(profile, opportunity, checklist, outline, fit_statement, missing_fields, warnings, gaps)
     return ApplicationAssistantRead(
         opportunity_id=opportunity.id,
         profile_id=profile.id,
@@ -24,6 +26,9 @@ def build_application_assistant(
         research_fit_statement=fit_statement,
         missing_profile_fields=missing_fields,
         eligibility_warnings=warnings,
+        readiness_score=gaps.readiness_score,
+        gap_analysis=gaps.gaps,
+        strengths=gaps.strengths,
         exported_notes=notes,
     )
 
@@ -108,10 +113,13 @@ def _eligibility_warnings(
     details: ResearcherProfileDetails | None,
 ) -> list[str]:
     warnings = []
+    requirements = extract_opportunity_requirements(opportunity)
     stages = {item.lower() for item in unpack_list(opportunity.career_stages)}
+    stages = stages or {item.lower() for item in requirements.career_stages}
     if stages and profile.career_stage.value.lower() not in stages:
         warnings.append(f"Career stage is {profile.career_stage.value}, while opportunity lists {', '.join(sorted(stages))}.")
     countries = {item.lower() for item in unpack_list(opportunity.countries)}
+    countries = countries or {item.lower() for item in requirements.countries}
     if profile.country and countries and profile.country.lower() not in countries and "global" not in countries:
         warnings.append(f"Profile country {profile.country} is not explicitly listed in opportunity countries.")
     if details:
@@ -132,6 +140,7 @@ def _export_notes(
     fit_statement: str,
     missing: list[str],
     warnings: list[str],
+    gaps,
 ) -> str:
     sections = [
         f"# Application Notes: {opportunity.title}",
@@ -151,5 +160,10 @@ def _export_notes(
         "",
         "## Eligibility Warnings",
         *[f"- {item}" for item in (warnings or ["None flagged"])],
+        "",
+        "## Readiness and Gaps",
+        f"Readiness score: {gaps.readiness_score}",
+        *[f"- Strength: {item}" for item in (gaps.strengths or ["None flagged"])],
+        *[f"- Gap: {item}" for item in (gaps.gaps or ["None flagged"])],
     ]
     return "\n".join(sections)

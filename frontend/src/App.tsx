@@ -265,6 +265,33 @@ function ScoreBreakdown({ item }: { item: Pick<Recommendation, "score_breakdown"
   );
 }
 
+function RequirementSummary({ opportunity }: { opportunity: Opportunity }) {
+  const requirements = opportunity.extracted_requirements;
+  if (!requirements || (requirements.confidence ?? 0) === 0) {
+    return <EmptyState title="No parsed requirements yet" detail="Add richer eligibility text to extract career stage, country, degree, language, and publication requirements." />;
+  }
+  const rows = [
+    ["Career stages", requirements.career_stages.join(", ")],
+    ["Countries", requirements.countries.join(", ")],
+    ["Degree", requirements.required_degree],
+    ["Languages", requirements.languages.join(", ")],
+    ["Years since PhD", requirements.years_since_phd ? String(requirements.years_since_phd) : ""],
+  ].filter(([, value]) => value);
+  return (
+    <div className="requirement-summary">
+      <strong>Parsed requirements ({requirements.confidence}% confidence)</strong>
+      <div className="score-grid">
+        {rows.map(([name, value]) => (
+          <span key={name}>{name}: {value}</span>
+        ))}
+      </div>
+      {requirements.publication_expectation && <p className="muted">Publication signal: {requirements.publication_expectation}</p>}
+      {requirements.mobility && <p className="muted">Mobility signal: {requirements.mobility}</p>}
+      {requirements.citizenship && <p className="muted">Citizenship signal: {requirements.citizenship}</p>}
+    </div>
+  );
+}
+
 function ProfileCompleteness({ profile, details }: { profile: Profile | null; details: ProfileDetailsPayload }) {
   const checks = [
     Boolean(profile?.full_name),
@@ -1022,7 +1049,7 @@ function App() {
             <datalist id="country-options">{countryOptions.map((item) => <option value={item} key={item} />)}</datalist>
             <datalist id="keyword-options">{keywordOptions.map((item) => <option value={item} key={item} />)}</datalist>
             <div className="cards">
-              {workspaceLoading ? <SkeletonCards /> : (activeProfile ? recommendations : opportunities.map((opportunity) => ({ opportunity, match_score: 0, semantic_score: 0, score_breakdown: { semantic: 0, eligibility: 0, deadline: 0, user_history: 0, final: 0 }, reasons: [], user_status: null }))).map(
+              {workspaceLoading ? <SkeletonCards /> : (activeProfile ? recommendations : opportunities.map((opportunity) => ({ opportunity, match_score: 0, semantic_score: 0, score_breakdown: { semantic: 0, eligibility: 0, deadline: 0, user_history: 0, final: 0 }, reasons: [], readiness_score: 0, gaps: [], strengths: [], user_status: null }))).map(
                 (item) => (
                   <OpportunityCard
                     key={item.opportunity.id}
@@ -1271,6 +1298,16 @@ function App() {
             )}
             {assistantResult && (
               <div className="assistant-grid separated">
+                <section className="span-2">
+                  <h3>Readiness</h3>
+                  <div className="completeness">
+                    <div>
+                      <span>Application readiness</span>
+                      <strong>{assistantResult.readiness_score}%</strong>
+                    </div>
+                    <div className="progress"><i style={{ width: `${assistantResult.readiness_score}%` }} /></div>
+                  </div>
+                </section>
                 <section>
                   <h3>Checklist</h3>
                   <ul>{assistantResult.application_checklist.map((item) => <li key={item}>{item}</li>)}</ul>
@@ -1290,6 +1327,14 @@ function App() {
                 <section>
                   <h3>Eligibility Warnings</h3>
                   <ul>{assistantResult.eligibility_warnings.map((item) => <li key={item}>{item}</li>)}</ul>
+                </section>
+                <section>
+                  <h3>Strengths</h3>
+                  <ul>{(assistantResult.strengths.length ? assistantResult.strengths : ["None flagged"]).map((item) => <li key={item}>{item}</li>)}</ul>
+                </section>
+                <section>
+                  <h3>Gap Analysis</h3>
+                  <ul>{(assistantResult.gap_analysis.length ? assistantResult.gap_analysis : ["None flagged"]).map((item) => <li key={item}>{item}</li>)}</ul>
                 </section>
                 <section className="span-2">
                   <h3>Export Notes</h3>
@@ -1465,6 +1510,7 @@ function App() {
               <>
                 <h3>Eligibility</h3>
                 <p>{selectedOpportunity.eligibility || "No eligibility text provided."}</p>
+                <RequirementSummary opportunity={selectedOpportunity} />
                 <div className="score-grid">
                   <span>Career stages {selectedOpportunity.career_stages.join(", ") || "Not specified"}</span>
                   <span>Countries {selectedOpportunity.countries.join(", ") || "Not specified"}</span>
@@ -1477,8 +1523,12 @@ function App() {
                   <>
                     <h3>Research Fit</h3>
                     <p>{assistantResult.research_fit_statement}</p>
+                    <h3>Readiness</h3>
+                    <p>{assistantResult.readiness_score}% application readiness</p>
                     <h3>Warnings</h3>
                     <ul className="reasons">{(assistantResult.eligibility_warnings.length ? assistantResult.eligibility_warnings : ["None flagged"]).map((item) => <li key={item}>{item}</li>)}</ul>
+                    <h3>Gaps</h3>
+                    <ul className="reasons">{(assistantResult.gap_analysis.length ? assistantResult.gap_analysis : ["None flagged"]).map((item) => <li key={item}>{item}</li>)}</ul>
                   </>
                 ) : (
                   <button

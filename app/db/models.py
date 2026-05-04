@@ -134,6 +134,8 @@ class Opportunity(Base):
     opportunity_embedding: Mapped[str] = mapped_column(Text, default="")
     embedding_model: Mapped[str] = mapped_column(String(200), default="")
     embedding_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    extracted_requirements: Mapped[str] = mapped_column(Text, default="")
+    requirements_confidence: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

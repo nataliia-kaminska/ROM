@@ -10,6 +10,7 @@ from app.db.session import get_db
 from app.schemas.recommendations import RecommendationRead
 from app.services.embeddings import ensure_profile_embedding, vector_literal
 from app.services.recommendation_engine import build_history_signals, score_opportunity
+from app.services.requirements import build_gap_analysis
 
 
 router = APIRouter(prefix="/recommendations", tags=["recommendations"])
@@ -47,6 +48,7 @@ def get_recommendations(
             continue
 
         scored = score_opportunity(profile, opportunity, details, status_record, history_signals)
+        gaps = build_gap_analysis(profile, opportunity, details)
         if scored.final_score >= min_score:
             recommendations.append(
                 RecommendationRead(
@@ -55,6 +57,9 @@ def get_recommendations(
                     semantic_score=scored.breakdown.semantic,
                     score_breakdown=scored.breakdown,
                     reasons=scored.reasons,
+                    readiness_score=gaps.readiness_score,
+                    gaps=gaps.gaps,
+                    strengths=gaps.strengths,
                     user_status=status_record.status.value if status_record else None,
                 )
             )

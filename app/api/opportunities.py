@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -15,6 +16,7 @@ from app.schemas.opportunities import (
 )
 from app.services.ingestion_audit import ensure_source, finish_batch, start_batch
 from app.services.opportunity_import import build_opportunity, import_opportunities
+from app.services.requirements import extract_opportunity_requirements
 from app.services.serialization import unpack_list
 
 
@@ -35,6 +37,8 @@ def _to_read(opportunity: Opportunity) -> OpportunityRead:
         countries=unpack_list(opportunity.countries),
         career_stages=unpack_list(opportunity.career_stages),
         deadline=opportunity.deadline,
+        extracted_requirements=asdict(extract_opportunity_requirements(opportunity)),
+        requirements_confidence=opportunity.requirements_confidence,
     )
 
 
@@ -52,6 +56,7 @@ def _to_preview(opportunity: Opportunity) -> OpportunityPreview:
         countries=unpack_list(opportunity.countries),
         career_stages=unpack_list(opportunity.career_stages),
         deadline=opportunity.deadline,
+        requirements_confidence=opportunity.requirements_confidence,
     )
 
 

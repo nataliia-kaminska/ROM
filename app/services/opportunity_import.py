@@ -2,11 +2,12 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Opportunity
 from app.schemas.opportunities import OpportunityCreate
+from app.services.requirements import refresh_opportunity_requirements
 from app.services.serialization import pack_list, unpack_list
 
 
 def build_opportunity(payload: OpportunityCreate, source: str | None = None) -> Opportunity:
-    return Opportunity(
+    opportunity = Opportunity(
         title=_clean_text(payload.title),
         opportunity_type=payload.opportunity_type,
         source=_clean_text(source or payload.source),
@@ -19,6 +20,8 @@ def build_opportunity(payload: OpportunityCreate, source: str | None = None) -> 
         career_stages=pack_list(_clean_list(payload.career_stages)),
         deadline=payload.deadline,
     )
+    refresh_opportunity_requirements(opportunity)
+    return opportunity
 
 
 def apply_opportunity_payload(opportunity: Opportunity, payload: OpportunityCreate, source: str | None = None) -> None:
@@ -33,6 +36,7 @@ def apply_opportunity_payload(opportunity: Opportunity, payload: OpportunityCrea
     opportunity.countries = pack_list(_merge_lists(unpack_list(opportunity.countries), payload.countries))
     opportunity.career_stages = pack_list(_merge_lists(unpack_list(opportunity.career_stages), payload.career_stages))
     opportunity.deadline = payload.deadline
+    refresh_opportunity_requirements(opportunity)
 
 
 def import_opportunities(

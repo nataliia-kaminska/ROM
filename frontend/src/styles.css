@@ -640,6 +640,15 @@ input:disabled {
   margin: 6px 0 0;
 }
 
+.requirement-summary {
+  background: #ffffff;
+  border: 1px solid #ded6c4;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
 .reasons {
   color: #40544b;
   margin: 0;

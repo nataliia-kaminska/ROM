@@ -12,6 +12,7 @@ from app.db.models import (
 )
 from app.schemas.recommendations import RecommendationScoreBreakdown
 from app.services.embeddings import cosine_similarity, ensure_opportunity_embedding, ensure_profile_embedding
+from app.services.requirements import extract_opportunity_requirements
 from app.services.serialization import normalize_terms, unpack_list
 
 
@@ -125,6 +126,9 @@ def _eligibility_score(
     opportunity_keywords = normalize_terms(unpack_list(opportunity.keywords))
     opportunity_countries = normalize_terms(unpack_list(opportunity.countries))
     opportunity_stages = normalize_terms(unpack_list(opportunity.career_stages))
+    extracted = extract_opportunity_requirements(opportunity)
+    opportunity_countries = opportunity_countries or normalize_terms(extracted.countries)
+    opportunity_stages = opportunity_stages or normalize_terms(extracted.career_stages)
 
     discipline_matches = profile_disciplines & opportunity_disciplines
     keyword_matches = profile_keywords & opportunity_keywords

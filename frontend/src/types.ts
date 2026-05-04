@@ -60,6 +60,19 @@ export type Opportunity = {
   countries: string[];
   career_stages: string[];
   deadline: string | null;
+  extracted_requirements?: {
+    career_stages: string[];
+    countries: string[];
+    required_degree: string;
+    languages: string[];
+    publication_expectation: string;
+    mobility: string;
+    citizenship: string;
+    years_since_phd: number | null;
+    snippets: string[];
+    confidence: number;
+  } | null;
+  requirements_confidence?: number;
 };
 
 export type Recommendation = {
@@ -74,6 +87,9 @@ export type Recommendation = {
     final: number;
   };
   reasons: string[];
+  readiness_score: number;
+  gaps: string[];
+  strengths: string[];
   user_status: OpportunityStatus | null;
 };
 
@@ -142,5 +158,8 @@ export type ApplicationAssistantResult = {
   research_fit_statement: string;
   missing_profile_fields: string[];
   eligibility_warnings: string[];
+  readiness_score: number;
+  gap_analysis: string[];
+  strengths: string[];
   exported_notes: string;
 };

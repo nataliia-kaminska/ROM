@@ -14,4 +14,7 @@ class ApplicationAssistantRead(BaseModel):
     research_fit_statement: str
     missing_profile_fields: list[str]
     eligibility_warnings: list[str]
+    readiness_score: int = 0
+    gap_analysis: list[str] = []
+    strengths: list[str] = []
     exported_notes: str

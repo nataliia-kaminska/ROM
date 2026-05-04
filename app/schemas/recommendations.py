@@ -17,4 +17,7 @@ class RecommendationRead(BaseModel):
     semantic_score: int = 0
     score_breakdown: RecommendationScoreBreakdown = RecommendationScoreBreakdown()
     reasons: list[str]
+    readiness_score: int = 0
+    gaps: list[str] = []
+    strengths: list[str] = []
     user_status: str | None = None

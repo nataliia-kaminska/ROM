@@ -5,6 +5,19 @@ from pydantic import BaseModel, HttpUrl
 from app.db.models import OpportunityType
 
 
+class ExtractedRequirementRead(BaseModel):
+    career_stages: list[str] = []
+    countries: list[str] = []
+    required_degree: str = ""
+    languages: list[str] = []
+    publication_expectation: str = ""
+    mobility: str = ""
+    citizenship: str = ""
+    years_since_phd: int | None = None
+    snippets: list[str] = []
+    confidence: int = 0
+
+
 class OpportunityBase(BaseModel):
     title: str
     opportunity_type: OpportunityType
@@ -25,12 +38,15 @@ class OpportunityCreate(OpportunityBase):
 
 class OpportunityRead(OpportunityBase):
     id: int
+    extracted_requirements: ExtractedRequirementRead | None = None
+    requirements_confidence: int = 0
 
     model_config = {"from_attributes": True}
 
 
 class OpportunityPreview(OpportunityBase):
     id: int | None = None
+    requirements_confidence: int = 0
 
 
 class OpportunityBulkImportRequest(BaseModel):

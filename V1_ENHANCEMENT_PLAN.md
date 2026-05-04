@@ -178,6 +178,13 @@ Acceptance criteria:
 - Recommendation scoring uses parsed requirements when available.
 - Application assistant warnings use parsed requirements.
 
+Status:
+
+- Deterministic requirement extractor added for career stage, country/region, degree, language, publication, mobility, citizenship, and years-since-PhD signals.
+- Extracted requirements are stored on opportunities with confidence and exposed in opportunity API responses.
+- Recommendation scoring uses parsed career-stage/country requirements when explicit metadata is sparse.
+- Frontend opportunity details show parsed requirements in the eligibility tab.
+
 ### 2.2 Success Probability and Gap Analysis
 
 Move beyond “match score” into “what is missing.”
@@ -206,6 +213,13 @@ Acceptance criteria:
 - Opportunity detail explains gaps clearly.
 - Assistant export includes gap analysis.
 - Tests cover at least three gap scenarios.
+
+Status:
+
+- Application readiness score and gap analysis are generated for each opportunity/profile pair.
+- Recommendations now include readiness score, strengths, and gaps.
+- Application Assistant output and export notes include readiness, strengths, and gaps.
+- Tests cover parser extraction, sparse-metadata recommendation scoring, and assistant gap analysis.
 
 ## Milestone 3: Real Notifications
 

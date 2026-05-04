@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { api, type OpportunityPayload, type ProfileDetailsPayload, type ProfilePayload } from "./api";
 import type {
   ApplicationAssistantResult,
@@ -18,6 +18,18 @@ import type {
 const careerStages: CareerStage[] = ["bachelor", "master", "phd", "postdoc", "early_career", "senior"];
 const opportunityTypes: OpportunityType[] = ["grant", "exchange", "fellowship", "internship", "research_position", "training"];
 const trackedStatuses: OpportunityStatus[] = ["saved", "planned", "applied", "accepted", "rejected", "ignored"];
+const reminderStatuses: OpportunityStatus[] = ["saved", "planned"];
+
+const defaultFilters = {
+  keyword: "",
+  opportunity_type: "",
+  country: "",
+  career_stage: "",
+  source: "",
+  active_only: true,
+  min_score: 0,
+  include_ignored: false,
+};
 
 type View = "feed" | "profile" | "orcid" | "board" | "reminders" | "notifications" | "assistant" | "admin";
 
@@ -75,6 +87,10 @@ function label(value: string): string {
   return value.replaceAll("_", " ");
 }
 
+function profileLabel(profile: Profile, fallbackEmail?: string): string {
+  return profile.full_name || profile.email || fallbackEmail || `Profile ${profile.id}`;
+}
+
 function normalizeUrl(value: string | null): string | null {
   const trimmed = (value ?? "").trim();
   return trimmed === "" ? null : trimmed;
@@ -91,18 +107,40 @@ function Field({
   onChange,
   type = "text",
   placeholder,
+  disabled,
+  list,
+  title,
 }: {
   labelText: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
   placeholder?: string;
+  disabled?: boolean;
+  list?: string;
+  title?: string;
 }) {
   return (
     <label className="field">
       <span>{labelText}</span>
-      <input type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+      <input
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        disabled={disabled}
+        list={list}
+        title={title}
+        onChange={(event) => onChange(event.target.value)}
+      />
     </label>
+  );
+}
+
+function HelpTip({ text }: { text: string }) {
+  return (
+    <span className="help-tip" title={text} aria-label={text}>
+      ?
+    </span>
   );
 }
 
@@ -111,17 +149,142 @@ function TextArea({
   value,
   onChange,
   placeholder,
+  className = "span-2",
 }: {
   labelText: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  className?: string;
 }) {
   return (
-    <label className="field span-2">
+    <label className={`field ${className}`}>
       <span>{labelText}</span>
       <textarea value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} rows={4} />
     </label>
+  );
+}
+
+function MultiValueField({
+  labelText,
+  values,
+  onChange,
+  placeholder = "Comma-separated values",
+}: {
+  labelText: string;
+  values: string[];
+  onChange: (values: string[]) => void;
+  placeholder?: string;
+}) {
+  return (
+    <label className="field">
+      <span>{labelText}</span>
+      <input value={joinList(values)} placeholder={placeholder} onChange={(event) => onChange(splitList(event.target.value))} />
+      {values.length > 0 && (
+        <div className="inline-tags">
+          {values.slice(0, 6).map((value) => (
+            <span key={value}>{value}</span>
+          ))}
+        </div>
+      )}
+    </label>
+  );
+}
+
+function JsonTextArea({
+  labelText,
+  value,
+  onChange,
+}: {
+  labelText: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return <TextArea className="span-2 mono-field" labelText={labelText} value={value} onChange={onChange} />;
+}
+
+function ActionButton({
+  children,
+  busy,
+  variant = "primary",
+  type = "submit",
+  onClick,
+  disabled,
+  className = "",
+}: {
+  children: ReactNode;
+  busy?: boolean;
+  variant?: "primary" | "secondary";
+  type?: "submit" | "button";
+  onClick?: () => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <button className={`${variant} ${className}`} type={type} onClick={onClick} disabled={busy || disabled}>
+      {busy && <span className="spinner" aria-hidden="true" />}
+      {busy ? "Working..." : children}
+    </button>
+  );
+}
+
+function SkeletonCards({ count = 6 }: { count?: number }) {
+  return (
+    <>
+      {Array.from({ length: count }, (_, index) => (
+        <article className="opportunity-card skeleton-card" key={index}>
+          <span />
+          <strong />
+          <p />
+          <p />
+        </article>
+      ))}
+    </>
+  );
+}
+
+function ScoreBreakdown({ item }: { item: Pick<Recommendation, "score_breakdown"> }) {
+  const entries = [
+    ["Semantic", item.score_breakdown.semantic],
+    ["Eligibility", item.score_breakdown.eligibility],
+    ["Deadline", item.score_breakdown.deadline],
+    ["History", item.score_breakdown.user_history],
+  ] as const;
+  return (
+    <div className="score-bars">
+      {entries.map(([name, value]) => (
+        <div className="score-bar" key={name}>
+          <span>{name}</span>
+          <div>
+            <i style={{ width: `${Math.max(4, value)}%` }} />
+          </div>
+          <b>{value}</b>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ProfileCompleteness({ profile, details }: { profile: Profile | null; details: ProfileDetailsPayload }) {
+  const checks = [
+    Boolean(profile?.full_name),
+    Boolean(profile?.email),
+    Boolean(profile?.country),
+    Boolean(profile?.disciplines.length),
+    Boolean(profile?.keywords.length),
+    Boolean(details.research_summary),
+    Boolean(details.publications.length),
+    Boolean(details.languages.length),
+  ];
+  const score = Math.round((checks.filter(Boolean).length / checks.length) * 100);
+  return (
+    <div className="completeness">
+      <div>
+        <span>Profile completeness</span>
+        <strong>{score}%</strong>
+      </div>
+      <div className="progress"><i style={{ width: `${score}%` }} /></div>
+    </div>
   );
 }
 
@@ -168,6 +331,7 @@ function App() {
   const [activeProfileId, setActiveProfileId] = useState<number | null>(null);
   const [view, setView] = useState<View>("feed");
   const [loading, setLoading] = useState(false);
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
@@ -181,19 +345,11 @@ function App() {
     preferred_countries: "",
   });
   const [openAlexForm, setOpenAlexForm] = useState({ openalex_author_id: "", orcid_id: "", max_works: 10 });
-  const [filters, setFilters] = useState({
-    keyword: "",
-    opportunity_type: "",
-    country: "",
-    career_stage: "",
-    source: "",
-    active_only: true,
-    min_score: 0,
-    include_ignored: false,
-  });
+  const [filters, setFilters] = useState(defaultFilters);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
+  const [detailTab, setDetailTab] = useState<"overview" | "reasons" | "eligibility" | "assistant" | "reminders">("overview");
   const [statuses, setStatuses] = useState<StatusRecord[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -232,6 +388,14 @@ function App() {
     () => profiles.find((profile) => profile.id === activeProfileId) ?? profiles[0] ?? null,
     [activeProfileId, profiles],
   );
+  const selectedRecommendation = useMemo(
+    () => recommendations.find((item) => item.opportunity.id === selectedOpportunity?.id) ?? null,
+    [recommendations, selectedOpportunity],
+  );
+  const selectedOpportunityReminders = useMemo(
+    () => reminders.filter((reminder) => reminder.opportunity_id === selectedOpportunity?.id),
+    [reminders, selectedOpportunity],
+  );
 
   async function loadSession(nextToken = token) {
     if (!nextToken) return;
@@ -265,24 +429,25 @@ function App() {
     }
   }
 
-  async function refreshWorkspace(profile = activeProfile) {
+  async function refreshWorkspace(profile = activeProfile, nextFilters = filters) {
     setError("");
+    setWorkspaceLoading(true);
     try {
       const opportunityQuery = {
-        keyword: filters.keyword,
-        opportunity_type: filters.opportunity_type,
-        country: filters.country,
-        career_stage: filters.career_stage,
-        source: filters.source,
-        active_only: filters.active_only,
+        keyword: nextFilters.keyword,
+        opportunity_type: nextFilters.opportunity_type,
+        country: nextFilters.country,
+        career_stage: nextFilters.career_stage,
+        source: nextFilters.source,
+        active_only: nextFilters.active_only,
         limit: 100,
       };
       const catalogPromise = api.opportunities(opportunityQuery);
       if (token && profile) {
         const [nextRecommendations, nextStatuses, nextReminders, nextOpportunities] = await Promise.all([
           api.recommendations(token, profile.id, {
-            min_score: filters.min_score,
-            include_ignored: filters.include_ignored,
+            min_score: nextFilters.min_score,
+            include_ignored: nextFilters.include_ignored,
           }),
           api.statuses(token, profile.id),
           api.reminders(token, profile.id, true),
@@ -297,6 +462,8 @@ function App() {
       }
     } catch (workspaceError) {
       setError((workspaceError as Error).message);
+    } finally {
+      setWorkspaceLoading(false);
     }
   }
 
@@ -310,8 +477,18 @@ function App() {
     }
   }, [token, activeProfileId]);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(""), 3200);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   async function submitAuth(event: FormEvent) {
     event.preventDefault();
+    if (!authForm.email || !authForm.password || (authMode === "register" && !authForm.full_name)) {
+      setError("Email, password, and name are required.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -322,7 +499,6 @@ function App() {
       localStorage.setItem("rom_token", response.access_token);
       setToken(response.access_token);
       setUser(response.user);
-      setNotice(`Signed in as ${response.user.email}`);
       await loadSession(response.access_token);
     } catch (authError) {
       setError((authError as Error).message);
@@ -342,15 +518,24 @@ function App() {
     setReminders([]);
   }
 
+  function resetFilters() {
+    setFilters(defaultFilters);
+    void refreshWorkspace(activeProfile, defaultFilters);
+  }
+
   async function saveProfile(event: FormEvent) {
     event.preventDefault();
     if (!token) return;
+    if (!profileForm.full_name || !profileForm.career_stage) {
+      setError("Full name and career stage are required.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
       const profile = await api.createProfile(token, {
         ...profileForm,
-        email: normalizeText(profileForm.email),
+        email: user?.email ?? normalizeText(profileForm.email),
         country: normalizeText(profileForm.country),
         orcid_id: normalizeText(profileForm.orcid_id),
         google_scholar_url: normalizeUrl(profileForm.google_scholar_url),
@@ -453,9 +638,15 @@ function App() {
     if (!token || !activeProfile) return;
     setError("");
     try {
-      await api.setStatus(token, activeProfile.id, opportunityId, status);
+      const updated = await api.setStatus(token, activeProfile.id, opportunityId, status);
+      setStatuses((current) => {
+        const others = current.filter((item) => item.opportunity_id !== opportunityId);
+        return [...others, updated];
+      });
+      setRecommendations((current) =>
+        current.map((item) => (item.opportunity.id === opportunityId ? { ...item, user_status: status } : item)),
+      );
       setNotice(`Marked as ${label(status)}`);
-      await refreshWorkspace(activeProfile);
     } catch (statusError) {
       setError((statusError as Error).message);
     }
@@ -464,6 +655,14 @@ function App() {
   async function createReminder(event: FormEvent) {
     event.preventDefault();
     if (!token || !activeProfile) return;
+    if (!reminderForm.opportunity_id || !reminderForm.remind_on) {
+      setError("Choose an opportunity and reminder date.");
+      return;
+    }
+    if (!selectedStatusIds.has(Number(reminderForm.opportunity_id))) {
+      setError("Save or plan the opportunity before creating a reminder.");
+      return;
+    }
     setError("");
     try {
       await api.createReminder(token, activeProfile.id, {
@@ -552,6 +751,14 @@ function App() {
   async function generateApplicationNotes(event: FormEvent) {
     event.preventDefault();
     if (!token || !activeProfile) return;
+    if (!assistantForm.opportunity_id) {
+      setError("Choose an opportunity before generating notes.");
+      return;
+    }
+    if (!selectedStatusIds.has(Number(assistantForm.opportunity_id))) {
+      setError("Save or plan the opportunity before opening the assistant.");
+      return;
+    }
     setError("");
     try {
       const opportunityId = Number(assistantForm.opportunity_id);
@@ -566,6 +773,9 @@ function App() {
     setError("");
     try {
       const opportunities = JSON.parse(importForm.payload) as OpportunityPayload[];
+      if (!Array.isArray(opportunities) || opportunities.length === 0) {
+        throw new Error("Curated import JSON must be a non-empty opportunity array.");
+      }
       const result = await api.bulkImport({ source: importForm.source, dry_run: importForm.dry_run, opportunities });
       setNotice(
         `${result.dry_run ? "Validated" : "Imported"} ${result.imported_count} new, ${result.updated_count} updated, ${result.skipped_count} skipped`,
@@ -578,6 +788,10 @@ function App() {
 
   async function runExternalImport(event: FormEvent) {
     event.preventDefault();
+    if (!externalForm.source_name || !externalForm.source_url) {
+      setError("Source name and feed URL are required.");
+      return;
+    }
     setError("");
     try {
       const result = await api.externalSourceImport({
@@ -671,6 +885,26 @@ function App() {
     () => new Map([...opportunities, ...recommendations.map((item) => item.opportunity)].map((item) => [item.id, item])),
     [opportunities, recommendations],
   );
+  const selectedStatusIds = useMemo(
+    () => new Set(statuses.filter((record) => reminderStatuses.includes(record.status)).map((record) => record.opportunity_id)),
+    [statuses],
+  );
+  const reminderEligibleOpportunities = useMemo(
+    () => [...opportunitiesById.values()].filter((opportunity) => selectedStatusIds.has(opportunity.id)),
+    [opportunitiesById, selectedStatusIds],
+  );
+  const sourceOptions = useMemo(
+    () => [...new Set([...opportunitiesById.values()].map((opportunity) => opportunity.source).filter(Boolean))].sort(),
+    [opportunitiesById],
+  );
+  const countryOptions = useMemo(
+    () => [...new Set([...opportunitiesById.values()].flatMap((opportunity) => opportunity.countries).filter(Boolean))].sort(),
+    [opportunitiesById],
+  );
+  const keywordOptions = useMemo(
+    () => [...new Set([...opportunitiesById.values()].flatMap((opportunity) => [...opportunity.keywords, ...opportunity.disciplines]).filter(Boolean))].sort(),
+    [opportunitiesById],
+  );
 
   if (!token || !user) {
     return (
@@ -688,9 +922,9 @@ function App() {
             <Field labelText="Email" type="email" value={authForm.email} onChange={(email) => setAuthForm({ ...authForm, email })} />
             <Field labelText="Password" type="password" value={authForm.password} onChange={(password) => setAuthForm({ ...authForm, password })} />
             {error && <div className="alert error span-2">{error}</div>}
-            <button className="primary span-2" disabled={loading}>
-              {loading ? "Working..." : authMode === "login" ? "Sign in" : "Sign up"}
-            </button>
+            <ActionButton busy={loading} variant="primary" className="span-2">
+              {authMode === "login" ? "Sign in" : "Sign up"}
+            </ActionButton>
           </form>
           <button className="ghost" onClick={() => setAuthMode(authMode === "login" ? "register" : "login")}>
             {authMode === "login" ? "Need an account? Sign up" : "Already have an account? Sign in"}
@@ -722,10 +956,14 @@ function App() {
           <select value={activeProfile?.id ?? ""} onChange={(event) => setActiveProfileId(Number(event.target.value))}>
             {profiles.map((profile) => (
               <option key={profile.id} value={profile.id}>
-                {profile.full_name}
+                {profileLabel(profile, user.email)}
               </option>
             ))}
           </select>
+        </div>
+        <div className="account-summary">
+          <span>{user.email}</span>
+          <small>{user.role}</small>
         </div>
         <button className="ghost" onClick={logout}>
           Sign out
@@ -736,12 +974,13 @@ function App() {
         <header className="topbar">
           <div>
             <p className="eyebrow">{user.role}</p>
-            <h1>{activeProfile ? activeProfile.full_name : "Create your first profile"}</h1>
+            <h1>{activeProfile ? profileLabel(activeProfile, user.email) : "Create your first profile"}</h1>
           </div>
-          <button className="secondary" onClick={() => void refreshWorkspace(activeProfile)}>
+          <ActionButton busy={workspaceLoading} variant="secondary" type="button" onClick={() => void refreshWorkspace(activeProfile)}>
             Refresh
-          </button>
+          </ActionButton>
         </header>
+        <ProfileCompleteness profile={activeProfile} details={detailsForm} />
 
         {notice && <div className="alert success">{notice}</div>}
         {error && <div className="alert error">{error}</div>}
@@ -755,15 +994,15 @@ function App() {
               </div>
             </div>
             <div className="filters">
-              <Field labelText="Keyword" value={filters.keyword} onChange={(keyword) => setFilters({ ...filters, keyword })} />
+              <Field labelText="Keyword" value={filters.keyword} list="keyword-options" placeholder="AI, biology, mobility..." onChange={(keyword) => setFilters({ ...filters, keyword })} />
               <SelectField
                 labelText="Type"
                 value={(filters.opportunity_type || "") as OpportunityType | ""}
                 options={["", ...opportunityTypes] as (OpportunityType | "")[]}
                 onChange={(opportunity_type) => setFilters({ ...filters, opportunity_type })}
               />
-              <Field labelText="Country" value={filters.country} onChange={(country) => setFilters({ ...filters, country })} />
-              <Field labelText="Source" value={filters.source} onChange={(source) => setFilters({ ...filters, source })} />
+              <Field labelText="Country" value={filters.country} list="country-options" placeholder="Germany, EU, USA..." onChange={(country) => setFilters({ ...filters, country })} />
+              <Field labelText="Source" value={filters.source} list="source-options" placeholder="euraxess, daad, grants.gov..." onChange={(source) => setFilters({ ...filters, source })} />
               <label className="toggle">
                 <input
                   type="checkbox"
@@ -772,23 +1011,33 @@ function App() {
                 />
                 Active only
               </label>
-              <button className="secondary" onClick={() => void refreshWorkspace(activeProfile)}>
+              <ActionButton variant="secondary" type="button" busy={workspaceLoading} onClick={() => void refreshWorkspace(activeProfile)}>
                 Apply filters
+              </ActionButton>
+              <button className="secondary" type="button" onClick={resetFilters}>
+                Clear filters
               </button>
             </div>
+            <datalist id="source-options">{sourceOptions.map((item) => <option value={item} key={item} />)}</datalist>
+            <datalist id="country-options">{countryOptions.map((item) => <option value={item} key={item} />)}</datalist>
+            <datalist id="keyword-options">{keywordOptions.map((item) => <option value={item} key={item} />)}</datalist>
             <div className="cards">
-              {(activeProfile ? recommendations : opportunities.map((opportunity) => ({ opportunity, match_score: 0, semantic_score: 0, score_breakdown: { semantic: 0, eligibility: 0, deadline: 0, user_history: 0, final: 0 }, reasons: [], user_status: null }))).map(
+              {workspaceLoading ? <SkeletonCards /> : (activeProfile ? recommendations : opportunities.map((opportunity) => ({ opportunity, match_score: 0, semantic_score: 0, score_breakdown: { semantic: 0, eligibility: 0, deadline: 0, user_history: 0, final: 0 }, reasons: [], user_status: null }))).map(
                 (item) => (
                   <OpportunityCard
                     key={item.opportunity.id}
                     item={item}
+                    canTrack={Boolean(activeProfile)}
                     onSelect={() => setSelectedOpportunity(item.opportunity)}
                     onStatus={(status) => void updateStatus(item.opportunity.id, status)}
                   />
                 ),
               )}
-              {activeProfile && recommendations.length === 0 && (
-                <EmptyState title="No recommendations yet" detail="Create a profile, import opportunities, or loosen filters to populate this feed." />
+              {activeProfile && !workspaceLoading && recommendations.length === 0 && (
+                <EmptyState title="No matches found" detail="Try clearing filters, lowering the score threshold, or searching broader terms like fellowship, mobility, AI, health, or Europe." />
+              )}
+              {!activeProfile && !workspaceLoading && opportunities.length === 0 && (
+                <EmptyState title="No opportunities found" detail="Try clearing filters or searching broader terms like fellowship, mobility, AI, health, or Europe." />
               )}
             </div>
           </section>
@@ -807,16 +1056,16 @@ function App() {
             </div>
             <form className="grid-form" onSubmit={saveProfile}>
               <Field labelText="Full name" value={profileForm.full_name} onChange={(full_name) => setProfileForm({ ...profileForm, full_name })} />
-              <Field labelText="Email" value={profileForm.email ?? ""} onChange={(email) => setProfileForm({ ...profileForm, email })} />
+              <Field labelText="Account email" value={user.email} disabled onChange={() => undefined} title="Profile email is linked to the signed-in account." />
               <SelectField labelText="Career stage" value={profileForm.career_stage} options={careerStages} onChange={(career_stage) => setProfileForm({ ...profileForm, career_stage })} />
-              <Field labelText="Country" value={profileForm.country ?? ""} onChange={(country) => setProfileForm({ ...profileForm, country })} />
-              <Field labelText="Disciplines" value={joinList(profileForm.disciplines)} onChange={(value) => setProfileForm({ ...profileForm, disciplines: splitList(value) })} />
-              <Field labelText="Keywords" value={joinList(profileForm.keywords)} onChange={(value) => setProfileForm({ ...profileForm, keywords: splitList(value) })} />
-              <Field labelText="Preferred countries" value={joinList(profileForm.preferred_countries)} onChange={(value) => setProfileForm({ ...profileForm, preferred_countries: splitList(value) })} />
+              <Field labelText="Country" value={profileForm.country ?? ""} list="country-options" placeholder="Use countries visible in the feed" onChange={(country) => setProfileForm({ ...profileForm, country })} />
+              <MultiValueField labelText="Disciplines" values={profileForm.disciplines} placeholder="Try values from current opportunities" onChange={(disciplines) => setProfileForm({ ...profileForm, disciplines })} />
+              <MultiValueField labelText="Keywords" values={profileForm.keywords} placeholder="Try values from current opportunities" onChange={(keywords) => setProfileForm({ ...profileForm, keywords })} />
+              <MultiValueField labelText="Preferred countries" values={profileForm.preferred_countries} onChange={(preferred_countries) => setProfileForm({ ...profileForm, preferred_countries })} />
               <Field labelText="ORCID" value={profileForm.orcid_id ?? ""} onChange={(orcid_id) => setProfileForm({ ...profileForm, orcid_id })} />
               <Field labelText="Google Scholar URL" value={profileForm.google_scholar_url ?? ""} onChange={(google_scholar_url) => setProfileForm({ ...profileForm, google_scholar_url })} />
               <Field labelText="LinkedIn URL" value={profileForm.linkedin_url ?? ""} onChange={(linkedin_url) => setProfileForm({ ...profileForm, linkedin_url })} />
-              <button className="primary span-2">Create profile</button>
+              <ActionButton busy={loading} className="span-2">Create profile</ActionButton>
             </form>
             <form className="grid-form separated" onSubmit={saveDetails}>
               <TextArea labelText="Research summary" value={detailsForm.research_summary} onChange={(research_summary) => setDetailsForm({ ...detailsForm, research_summary })} />
@@ -830,14 +1079,19 @@ function App() {
                 value={joinList(detailsForm.preferred_opportunity_types)}
                 onChange={(value) => setDetailsForm({ ...detailsForm, preferred_opportunity_types: splitList(value) as OpportunityType[] })}
               />
-              <button className="primary span-2">Save details</button>
+              <ActionButton busy={loading} className="span-2">Save details</ActionButton>
             </form>
           </section>
         )}
 
         {view === "orcid" && (
           <section className="panel">
-            <h2>ORCID Import</h2>
+            <div className="section-title">
+              <div className="title-with-help">
+                <h2>ORCID Import</h2>
+                <HelpTip text="ORCID is a public researcher identifier. This app uses it to prefill your profile and improve matching with public academic metadata." />
+              </div>
+            </div>
             <form className="grid-form" onSubmit={importOrcid}>
               <Field labelText="ORCID iD" value={orcidForm.orcid_id} onChange={(orcid_id) => setOrcidForm({ ...orcidForm, orcid_id })} placeholder="0000-0000-0000-0000" />
               <Field labelText="Email" value={orcidForm.email} onChange={(email) => setOrcidForm({ ...orcidForm, email })} />
@@ -848,7 +1102,10 @@ function App() {
             </form>
             <form className="grid-form separated" onSubmit={importOpenAlex}>
               <div className="span-2">
-                <h2>OpenAlex Enrichment</h2>
+                <div className="title-with-help">
+                  <h2>OpenAlex Enrichment</h2>
+                  <HelpTip text="OpenAlex is an open scholarly graph. Enrichment adds public publication titles and concepts to improve profile completeness and recommendation explanations." />
+                </div>
                 <p className="muted">Merge public concepts and publication titles into the active profile.</p>
               </div>
               <Field labelText="OpenAlex author id" value={openAlexForm.openalex_author_id} onChange={(openalex_author_id) => setOpenAlexForm({ ...openAlexForm, openalex_author_id })} placeholder="A1234567890" />
@@ -881,13 +1138,16 @@ function App() {
 
         {view === "reminders" && (
           <section className="panel">
-            <h2>Reminders</h2>
+            <div className="title-with-help">
+              <h2>Reminders</h2>
+              <HelpTip text="Create reminders only for opportunities you saved or planned, so the reminder list stays tied to real intent." />
+            </div>
             <form className="grid-form" onSubmit={createReminder}>
               <label className="field">
                 <span>Opportunity</span>
                 <select value={reminderForm.opportunity_id} onChange={(event) => setReminderForm({ ...reminderForm, opportunity_id: event.target.value })}>
-                  <option value="">Select an opportunity</option>
-                  {[...opportunitiesById.values()].map((opportunity) => (
+                  <option value="">Select a saved or planned opportunity</option>
+                  {reminderEligibleOpportunities.map((opportunity) => (
                     <option value={opportunity.id} key={opportunity.id}>
                       {opportunity.title}
                     </option>
@@ -905,8 +1165,8 @@ function App() {
                   <span>{reminder.remind_on}</span>
                   <span>{label(reminder.status)}</span>
                   {reminder.status === "pending" && (
-                    <button className="secondary" onClick={() => void completeReminder(reminder.id)}>
-                      Complete
+                    <button className="secondary" title="Mark this reminder as done so it leaves the pending workflow." onClick={() => void completeReminder(reminder.id)}>
+                      Mark done
                     </button>
                   )}
                 </div>
@@ -923,8 +1183,8 @@ function App() {
                 <h2>Notifications</h2>
                 <p>Review reminder history and tune proactive alerts.</p>
               </div>
-              <button className="secondary" onClick={() => void loadNotifications()}>
-                Load notifications
+              <button className="secondary" title="Fetch the latest notification history and saved alert preferences." onClick={() => void loadNotifications()}>
+                Refresh notifications
               </button>
             </div>
             <form className="grid-form" onSubmit={saveNotificationPrefs}>
@@ -944,7 +1204,18 @@ function App() {
                 <input type="checkbox" checked={notificationPrefs.high_match_alerts_enabled} onChange={(event) => setNotificationPrefs({ ...notificationPrefs, high_match_alerts_enabled: event.target.checked })} />
                 High-match alerts
               </label>
-              <Field labelText="Minimum alert score" type="number" value={String(notificationPrefs.min_alert_score)} onChange={(min_alert_score) => setNotificationPrefs({ ...notificationPrefs, min_alert_score: Number(min_alert_score) })} />
+              <label className="field">
+                <span>
+                  Minimum alert score <HelpTip text="High-match alerts only send when a recommendation score is at or above this number." />
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={String(notificationPrefs.min_alert_score)}
+                  onChange={(event) => setNotificationPrefs({ ...notificationPrefs, min_alert_score: Number(event.target.value) })}
+                />
+              </label>
               <div className="actions">
                 <button className="primary">Save preferences</button>
                 <button className="secondary" type="button" onClick={() => void unsubscribe()}>
@@ -974,7 +1245,10 @@ function App() {
           <section className="panel">
             <div className="section-title">
               <div>
-                <h2>Application Assistant</h2>
+                <div className="title-with-help">
+                  <h2>Application Assistant</h2>
+                  <HelpTip text="Save or plan an opportunity first, then generate structured notes for that specific application." />
+                </div>
                 <p>Generate a checklist, motivation outline, fit statement, eligibility warnings, and exportable notes.</p>
               </div>
             </div>
@@ -982,8 +1256,8 @@ function App() {
               <label className="field span-2">
                 <span>Opportunity</span>
                 <select value={assistantForm.opportunity_id} onChange={(event) => setAssistantForm({ opportunity_id: event.target.value })}>
-                  <option value="">Select an opportunity</option>
-                  {[...opportunitiesById.values()].map((opportunity) => (
+                  <option value="">Select a saved or planned opportunity</option>
+                  {reminderEligibleOpportunities.map((opportunity) => (
                     <option value={opportunity.id} key={opportunity.id}>
                       {opportunity.title}
                     </option>
@@ -992,6 +1266,9 @@ function App() {
               </label>
               <button className="primary span-2">Generate notes</button>
             </form>
+            {reminderEligibleOpportunities.length === 0 && (
+              <EmptyState title="No saved or planned opportunities" detail="Save or plan an opportunity from the feed before using the assistant." />
+            )}
             {assistantResult && (
               <div className="assistant-grid separated">
                 <section>
@@ -1048,7 +1325,7 @@ function App() {
                 <input type="checkbox" checked={importForm.dry_run} onChange={(event) => setImportForm({ ...importForm, dry_run: event.target.checked })} />
                 Dry run
               </label>
-              <TextArea labelText="Curated opportunities JSON" value={importForm.payload} onChange={(payload) => setImportForm({ ...importForm, payload })} />
+              <JsonTextArea labelText="Curated opportunities JSON" value={importForm.payload} onChange={(payload) => setImportForm({ ...importForm, payload })} />
               <button className="primary span-2">Import curated list</button>
             </form>
             <form className="grid-form separated" onSubmit={runExternalImport}>
@@ -1147,14 +1424,89 @@ function App() {
               <span>{label(selectedOpportunity.opportunity_type)}</span>
               <span>{selectedOpportunity.deadline ?? "No deadline"}</span>
             </div>
-            <p>{selectedOpportunity.summary || "No summary provided."}</p>
-            <h3>Eligibility</h3>
-            <p>{selectedOpportunity.eligibility || "No eligibility text provided."}</p>
-            <div className="chips">
-              {[...selectedOpportunity.disciplines, ...selectedOpportunity.keywords, ...selectedOpportunity.countries].map((chip) => (
-                <span key={chip}>{chip}</span>
+            {selectedRecommendation && (
+              <div className="intelligence-panel">
+                <strong>{selectedRecommendation.match_score}% match</strong>
+                <ScoreBreakdown item={selectedRecommendation} />
+              </div>
+            )}
+            <div className="tabs">
+              {(["overview", "reasons", "eligibility", "assistant", "reminders"] as const).map((tab) => (
+                <button className={detailTab === tab ? "active" : ""} key={tab} onClick={() => setDetailTab(tab)}>
+                  {label(tab)}
+                </button>
               ))}
             </div>
+            {detailTab === "overview" && (
+              <>
+                <p>{selectedOpportunity.summary || "No summary provided."}</p>
+                <div className="chips">
+                  {[...selectedOpportunity.disciplines, ...selectedOpportunity.keywords, ...selectedOpportunity.countries].map((chip) => (
+                    <span key={chip}>{chip}</span>
+                  ))}
+                </div>
+              </>
+            )}
+            {detailTab === "reasons" && (
+              selectedRecommendation ? (
+                <div className="explanation-grid">
+                  {selectedRecommendation.reasons.map((reason) => (
+                    <article key={reason}>
+                      <strong>{reason.includes("lower") ? "Risk" : "Signal"}</strong>
+                      <p>{reason}</p>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState title="No match reasons" detail="Recommendations explain semantic, eligibility, deadline, and history signals once a profile is selected." />
+              )
+            )}
+            {detailTab === "eligibility" && (
+              <>
+                <h3>Eligibility</h3>
+                <p>{selectedOpportunity.eligibility || "No eligibility text provided."}</p>
+                <div className="score-grid">
+                  <span>Career stages {selectedOpportunity.career_stages.join(", ") || "Not specified"}</span>
+                  <span>Countries {selectedOpportunity.countries.join(", ") || "Not specified"}</span>
+                </div>
+              </>
+            )}
+            {detailTab === "assistant" && (
+              <div>
+                {assistantResult?.opportunity_id === selectedOpportunity.id ? (
+                  <>
+                    <h3>Research Fit</h3>
+                    <p>{assistantResult.research_fit_statement}</p>
+                    <h3>Warnings</h3>
+                    <ul className="reasons">{(assistantResult.eligibility_warnings.length ? assistantResult.eligibility_warnings : ["None flagged"]).map((item) => <li key={item}>{item}</li>)}</ul>
+                  </>
+                ) : (
+                  <button
+                    className="primary"
+                    disabled={!selectedStatusIds.has(selectedOpportunity.id)}
+                    onClick={() => {
+                      setAssistantForm({ opportunity_id: String(selectedOpportunity.id) });
+                      setView("assistant");
+                      setSelectedOpportunity(null);
+                    }}
+                  >
+                    {selectedStatusIds.has(selectedOpportunity.id) ? "Open assistant for this opportunity" : "Save or plan to use assistant"}
+                  </button>
+                )}
+              </div>
+            )}
+            {detailTab === "reminders" && (
+              <div className="table">
+                {selectedOpportunityReminders.map((reminder) => (
+                  <div className="table-row compact-row" key={reminder.id}>
+                    <span>{reminder.message || "Deadline reminder"}</span>
+                    <span>{reminder.remind_on}</span>
+                    <span>{label(reminder.status)}</span>
+                  </div>
+                ))}
+                {selectedOpportunityReminders.length === 0 && <EmptyState title="No reminders for this opportunity" detail="Saving or planning opportunities can create deadline reminders automatically." />}
+              </div>
+            )}
             <a className="primary link-button" href={selectedOpportunity.url} target="_blank" rel="noreferrer">
               Open source
             </a>
@@ -1177,10 +1529,12 @@ function App() {
 
 function OpportunityCard({
   item,
+  canTrack,
   onSelect,
   onStatus,
 }: {
   item: Pick<Recommendation, "opportunity" | "match_score" | "semantic_score" | "score_breakdown" | "reasons" | "user_status">;
+  canTrack: boolean;
   onSelect: () => void;
   onStatus: (status: OpportunityStatus) => void;
 }) {
@@ -1217,13 +1571,13 @@ function OpportunityCard({
         <button className="secondary" onClick={onSelect}>
           Details
         </button>
-        <button className="secondary" onClick={() => onStatus("saved")}>
+        <button className="secondary" disabled={!canTrack} title={canTrack ? "Keep this opportunity for later." : "Create a profile before saving opportunities."} onClick={() => onStatus("saved")}>
           Save
         </button>
-        <button className="secondary" onClick={() => onStatus("planned")}>
+        <button className="secondary" disabled={!canTrack} title={canTrack ? "Add this opportunity to your application plan." : "Create a profile before planning opportunities."} onClick={() => onStatus("planned")}>
           Plan
         </button>
-        <button className="secondary" onClick={() => onStatus("ignored")}>
+        <button className="secondary" disabled={!canTrack} title={canTrack ? "Hide this kind of result and teach ranking preferences." : "Create a profile before ignoring opportunities."} onClick={() => onStatus("ignored")}>
           Ignore
         </button>
       </div>

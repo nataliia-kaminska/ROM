@@ -93,3 +93,52 @@ def test_bulk_import_dry_run_does_not_persist(client):
 
     assert batches_response.status_code == 200
     assert batches_response.json()[0]["status"] == "dry_run"
+
+
+def test_bulk_import_updates_content_duplicate_with_cleaned_metadata(client):
+    first = client.post(
+        "/opportunities/bulk-import",
+        json={
+            "source": "daad",
+            "opportunities": [
+                {
+                    "title": "  Climate Fellowship ",
+                    "opportunity_type": "fellowship",
+                    "source": "ignored",
+                    "url": "https://example.org/daad/climate/",
+                    "summary": "Initial summary",
+                    "keywords": ["Climate", " climate "],
+                    "countries": ["Germany"],
+                }
+            ],
+        },
+    )
+    second = client.post(
+        "/opportunities/bulk-import",
+        json={
+            "source": "daad",
+            "opportunities": [
+                {
+                    "title": "Climate  Fellowship",
+                    "opportunity_type": "fellowship",
+                    "source": "ignored",
+                    "url": "https://example.org/daad/climate-updated",
+                    "summary": "Updated summary",
+                    "keywords": ["Adaptation"],
+                    "countries": ["Germany", " Germany "],
+                }
+            ],
+        },
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    body = second.json()
+    assert body["imported_count"] == 0
+    assert body["updated_count"] == 1
+    opportunities = client.get("/opportunities").json()
+    assert len(opportunities) == 1
+    assert opportunities[0]["title"] == "Climate Fellowship"
+    assert opportunities[0]["summary"] == "Updated summary"
+    assert set(opportunities[0]["keywords"]) == {"Climate", "Adaptation"}
+    assert opportunities[0]["countries"] == ["Germany"]

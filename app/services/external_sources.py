@@ -9,6 +9,7 @@ from app.schemas.ingestion import ExternalSourceImportRequest, ExternalSourceImp
 from app.schemas.opportunities import OpportunityCreate
 from app.services.ingestion_audit import ensure_source, finish_batch, start_batch
 from app.services.opportunity_import import import_opportunities
+from app.services.source_connectors import get_source_connector
 
 
 class ExternalSourceClient:
@@ -23,7 +24,8 @@ class ExternalSourceClient:
 
 def import_external_source(payload: ExternalSourceImportRequest, db, client: ExternalSourceClient | None = None) -> ExternalSourceImportResult:
     source_client = client or ExternalSourceClient()
-    ensure_source(db, name=payload.source_name, display_name=payload.source_name, base_url=str(payload.source_url), source_type=payload.source_kind)
+    connector = get_source_connector(payload.source_name)
+    ensure_source(db, name=payload.source_name, display_name=connector.display_name, base_url=str(payload.source_url), source_type=payload.source_kind)
     batch = start_batch(db, source_name=payload.source_name, query=str(payload.source_url), dry_run=not payload.import_results)
     try:
         raw = source_client.fetch(str(payload.source_url))
@@ -99,34 +101,36 @@ def _rss_items(raw: str) -> list[dict[str, Any]]:
 
 
 def _payload_from_mapping(item: dict[str, Any], payload: ExternalSourceImportRequest) -> OpportunityCreate:
-    title = _first(item, "title", "name", "opportunityTitle") or "Untitled opportunity"
-    url = _first(item, "url", "link", "href", "web_url") or str(payload.source_url)
-    summary = _first(item, "summary", "description", "abstract", "content") or ""
-    keywords = _list_value(item.get("keywords") or item.get("tags") or item.get("category"))
+    connector = get_source_connector(payload.source_name)
+    normalized = connector.normalize(item)
+    title = normalized.title
+    url = normalized.url or str(payload.source_url)
+    summary = normalized.summary
+    keywords = _dedupe(normalized.keywords)
     if payload.keyword:
         keywords.append(payload.keyword)
-    country_values = _list_value(item.get("countries") or item.get("country"))
+    country_values = _dedupe(normalized.countries)
     if payload.default_country:
         country_values.append(payload.default_country)
-    stage_values = _list_value(item.get("career_stages") or item.get("careerStage"))
+    stage_values = _dedupe(normalized.career_stages)
     if payload.default_career_stage:
         stage_values.append(payload.default_career_stage)
-    disciplines = _list_value(item.get("disciplines") or item.get("fields"))
+    disciplines = _dedupe(normalized.disciplines)
     if payload.default_discipline:
         disciplines.append(payload.default_discipline)
 
     return OpportunityCreate(
         title=title,
-        opportunity_type=_opportunity_type(_first(item, "opportunity_type", "type") or payload.default_opportunity_type),
+        opportunity_type=normalized.opportunity_type or _opportunity_type(payload.default_opportunity_type),
         source=payload.source_name,
         url=url,
         summary=summary,
-        eligibility=_first(item, "eligibility", "requirements") or "",
-        disciplines=disciplines,
-        keywords=keywords,
-        countries=country_values,
-        career_stages=stage_values,
-        deadline=_parse_date(_first(item, "deadline", "closeDate", "closing_date", "pubDate") or ""),
+        eligibility=normalized.eligibility,
+        disciplines=_dedupe(disciplines),
+        keywords=_dedupe(keywords),
+        countries=_dedupe(country_values),
+        career_stages=_dedupe(stage_values),
+        deadline=_parse_date(normalized.deadline),
     )
 
 
@@ -149,6 +153,18 @@ def _list_value(value: Any) -> list[str]:
     if isinstance(value, list):
         return [str(item).strip() for item in value if str(item).strip()]
     return [item.strip() for item in str(value).replace(";", ",").split(",") if item.strip()]
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        normalized = value.strip()
+        key = normalized.casefold()
+        if normalized and key not in seen:
+            seen.add(key)
+            result.append(normalized)
+    return result
 
 
 def _opportunity_type(value: str) -> OpportunityType:

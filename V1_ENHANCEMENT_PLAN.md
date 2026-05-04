@@ -362,6 +362,12 @@ Acceptance criteria:
 - Each connector has tests for normalization and import.
 - Admin source page shows connector freshness and errors.
 
+Status:
+
+- Source connector interface added with source-specific normalizers for EURAXESS, DAAD, Fulbright, and MSCA.
+- Generic RSS/JSON import now routes through named connectors when the source matches a known provider.
+- Connector tests cover normalization of EURAXESS, DAAD, Fulbright, and MSCA fixture payloads.
+
 ### 5.2 Data Cleaning and Content-Based Deduplication
 
 From `ideas.txt`: dedupe should use content, not only URL.
@@ -383,6 +389,12 @@ Acceptance criteria:
 - Statuses/reminders/notifications are preserved or merged without integrity errors.
 - Admin UI shows duplicate confidence and merge preview.
 
+Status:
+
+- Opportunity imports now normalize titles, URLs, text fields, and repeated list values.
+- Bulk import detects same-source content duplicates by normalized title when URLs differ.
+- Admin duplicate merge now resolves unique status/reminder collisions by merging status priority, notes, reminder messages, and notification links before deleting duplicates.
+
 ## Milestone 6: Frontend Professionalization
 
 ### 6.1 Reusable Form System
@@ -402,6 +414,12 @@ Acceptance criteria:
 - Forms no longer duplicate field logic.
 - Each API action has clear loading/success/error states.
 - Invalid forms show inline validation before sending.
+
+Status:
+
+- Reusable field, select, textarea, multi-value, JSON editor, and action button components added to the React app.
+- Key workflows now validate required fields before sending requests, including auth, profiles, reminders, assistant generation, curated imports, and external source imports.
+- Primary save/refresh actions now expose loading/disabled states through shared button behavior.
 
 ### 6.2 Smoother Product UI
 
@@ -427,6 +445,14 @@ Acceptance criteria:
 - Main researcher flow can be demoed smoothly in under five minutes.
 - Mobile and desktop layouts remain usable.
 
+Status:
+
+- Recommendation feed now shows skeleton cards while workspace data refreshes.
+- Profile completeness indicator added above the main workspace.
+- Opportunity details now use tabs for overview, match reasons, eligibility, application assistant, and reminders.
+- Score breakdowns now render as compact bars in the opportunity detail drawer.
+- Frontend styling was expanded for polished tabs, loading indicators, compact rows, JSON editing, and responsive layouts.
+
 ### 6.3 Intelligence Visibility
 
 From `ideas.txt`: the system’s intelligence should be visible in the UI.
@@ -449,6 +475,12 @@ Acceptance criteria:
 
 - Demo viewers can see why the system is intelligent.
 - Recommendations feel explainable, not just ranked.
+
+Status:
+
+- Opportunity details expose match intelligence in a dedicated panel with component score bars.
+- Match reasons now render as explanation cards instead of raw list text.
+- Eligibility, reminders, and assistant context are grouped into focused tabs for clearer demo flow.
 
 ## Milestone 7: Strategic Career Intelligence
 
@@ -588,3 +620,13 @@ Add these sections once the matching improvements are implemented:
 - Privacy and Ethical AI: personal data, integrations, consent, GDPR notes.
 - Source Quality: how imports are validated, deduplicated, and monitored.
 - V1 Roadmap: collaboration module, success probability, funding roadmap.
+
+## Product Questions To Discuss
+
+These came from light manual V1 testing and need product decisions before deeper implementation:
+
+- Account/profile model: decide whether users should have multiple research profiles, or whether the active profile switcher should be removed for a simpler one-account-one-profile flow.
+- Status taxonomy: define exact user-facing meaning for saved, planned, applied, accepted, rejected, and ignored, then decide whether saved/planned should become more explicit labels like "saved" and "in application plan."
+- Reminder lifecycle: decide whether completed reminders should be hidden by default, archived in a separate view, or replaced with a snooze/dismiss model.
+- Application Assistant depth: current output is structured but still mostly deterministic. Decide whether V1 should add requirement extraction, opportunity-specific document prompts, CV tailoring, or an optional LLM/local model provider before calling it complete.
+- Controlled vocabularies: decide whether country, discipline, source, and keyword fields should use strict dropdown taxonomies or continue with datalist hints from the current opportunity database.

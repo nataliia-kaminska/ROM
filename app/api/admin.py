@@ -3,7 +3,18 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_optional_current_user
 from app.api.opportunities import _to_read
-from app.db.models import AdminAuditLog, IngestionBatch, IngestionBatchStatus, Notification, Opportunity, OpportunityReminder, OpportunitySource, ProfileOpportunityStatus
+from app.db.models import (
+    AdminAuditLog,
+    IngestionBatch,
+    IngestionBatchStatus,
+    Notification,
+    Opportunity,
+    OpportunityReminder,
+    OpportunitySource,
+    ProfileOpportunityStatus,
+    ProfileOpportunityStatusValue,
+    ReminderStatus,
+)
 from app.db.session import get_db
 from app.schemas.admin import AdminAnalyticsRead, AdminAuditLogRead, AdminDashboardRead, DuplicateMergeRequest, DuplicateOpportunityGroup
 from app.schemas.opportunities import OpportunityCreate, OpportunityRead
@@ -65,12 +76,8 @@ def merge_duplicates(
     for duplicate in duplicates_to_remove:
         if duplicate.id == target.id:
             continue
-        db.query(ProfileOpportunityStatus).filter(ProfileOpportunityStatus.opportunity_id == duplicate.id).update(
-            {ProfileOpportunityStatus.opportunity_id: target.id}
-        )
-        db.query(OpportunityReminder).filter(OpportunityReminder.opportunity_id == duplicate.id).update(
-            {OpportunityReminder.opportunity_id: target.id}
-        )
+        _merge_status_records(db, duplicate.id, target.id)
+        _merge_reminder_records(db, duplicate.id, target.id)
         db.query(Notification).filter(Notification.opportunity_id == duplicate.id).update(
             {Notification.opportunity_id: target.id}
         )
@@ -86,6 +93,75 @@ def merge_duplicates(
     db.commit()
     db.refresh(target)
     return _to_read(target)
+
+
+def _merge_status_records(db: Session, duplicate_id: int, target_id: int) -> None:
+    duplicate_records = db.query(ProfileOpportunityStatus).filter(ProfileOpportunityStatus.opportunity_id == duplicate_id).all()
+    for duplicate_record in duplicate_records:
+        target_record = (
+            db.query(ProfileOpportunityStatus)
+            .filter(
+                ProfileOpportunityStatus.profile_id == duplicate_record.profile_id,
+                ProfileOpportunityStatus.opportunity_id == target_id,
+            )
+            .first()
+        )
+        if target_record is None:
+            duplicate_record.opportunity_id = target_id
+            continue
+        target_record.status = _preferred_status(target_record.status, duplicate_record.status)
+        target_record.notes = _combine_notes(target_record.notes, duplicate_record.notes)
+        db.delete(duplicate_record)
+    db.flush()
+
+
+def _merge_reminder_records(db: Session, duplicate_id: int, target_id: int) -> None:
+    duplicate_records = db.query(OpportunityReminder).filter(OpportunityReminder.opportunity_id == duplicate_id).all()
+    for duplicate_record in duplicate_records:
+        target_record = (
+            db.query(OpportunityReminder)
+            .filter(
+                OpportunityReminder.profile_id == duplicate_record.profile_id,
+                OpportunityReminder.opportunity_id == target_id,
+                OpportunityReminder.remind_on == duplicate_record.remind_on,
+            )
+            .first()
+        )
+        if target_record is None:
+            duplicate_record.opportunity_id = target_id
+            continue
+        if duplicate_record.status == ReminderStatus.pending:
+            target_record.status = ReminderStatus.pending
+            target_record.completed_at = None
+        elif target_record.completed_at is None:
+            target_record.completed_at = duplicate_record.completed_at
+        target_record.message = _combine_notes(target_record.message, duplicate_record.message)
+        db.delete(duplicate_record)
+    db.flush()
+
+
+def _preferred_status(
+    first: ProfileOpportunityStatusValue,
+    second: ProfileOpportunityStatusValue,
+) -> ProfileOpportunityStatusValue:
+    rank = {
+        ProfileOpportunityStatusValue.accepted: 6,
+        ProfileOpportunityStatusValue.applied: 5,
+        ProfileOpportunityStatusValue.planned: 4,
+        ProfileOpportunityStatusValue.saved: 3,
+        ProfileOpportunityStatusValue.rejected: 2,
+        ProfileOpportunityStatusValue.ignored: 1,
+    }
+    return first if rank[first] >= rank[second] else second
+
+
+def _combine_notes(first: str, second: str) -> str:
+    values = []
+    for value in (first, second):
+        cleaned = value.strip()
+        if cleaned and cleaned not in values:
+            values.append(cleaned)
+    return "\n".join(values)
 
 
 @router.put("/opportunities/{opportunity_id}", response_model=OpportunityRead)

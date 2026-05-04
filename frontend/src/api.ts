@@ -26,6 +26,28 @@ type RequestOptions = {
   query?: Record<string, string | number | boolean | null | undefined>;
 };
 
+function formatErrorPayload(payload: unknown, fallback: string): string {
+  if (!payload || typeof payload !== "object") return fallback;
+  const record = payload as Record<string, unknown>;
+  if (typeof record.detail === "string") return record.detail;
+  if (Array.isArray(record.detail)) {
+    return record.detail
+      .map((item) => {
+        if (!item || typeof item !== "object") return String(item);
+        const error = item as Record<string, unknown>;
+        const location = Array.isArray(error.loc) ? error.loc.slice(1).join(".") : "";
+        const message = typeof error.msg === "string" ? error.msg : JSON.stringify(error);
+        return location ? `${location}: ${message}` : message;
+      })
+      .join("; ");
+  }
+  if (record.error && typeof record.error === "object") {
+    const error = record.error as Record<string, unknown>;
+    if (typeof error.message === "string") return error.message;
+  }
+  return fallback;
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const url = new URL(path, API_BASE_URL);
   Object.entries(options.query ?? {}).forEach(([key, value]) => {
@@ -47,7 +69,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     let message = `Request failed with ${response.status}`;
     try {
       const payload = await response.json();
-      message = payload.detail ?? message;
+      message = formatErrorPayload(payload, message);
     } catch {
       message = response.statusText || message;
     }

@@ -2,6 +2,7 @@ import httpx
 
 from app.schemas.ingestion import ExternalSourceImportRequest
 from app.services.external_sources import ExternalSourceClient, normalize_external_source
+from app.services.source_connectors import get_source_connector
 
 
 def test_normalize_external_rss_source_to_opportunities():
@@ -74,3 +75,50 @@ def test_external_source_import_records_batch(client, monkeypatch):
     sources_response = client.get("/sources")
     assert sources_response.status_code == 200
     assert sources_response.json()[0]["name"] == "euraxess"
+
+
+def test_source_specific_connectors_normalize_fixture_payloads():
+    euraxess = get_source_connector("euraxess").normalize(
+        {
+            "title": "AI Mobility Postdoc",
+            "applyUrl": "https://example.org/euraxess/apply",
+            "offerDescription": "Postdoctoral mobility role for trustworthy AI.",
+            "hosting_country": "France",
+            "researcherProfile": "postdoc",
+        }
+    )
+    daad = get_source_connector("daad").normalize(
+        {
+            "name": "Climate Adaptation Fellowship",
+            "link": "https://example.org/daad/climate",
+            "programmeDescription": "Funding for climate adaptation research.",
+            "applicationDeadline": "2026-10-01",
+        }
+    )
+    fulbright = get_source_connector("fulbright").normalize(
+        {
+            "title": "Visiting Scholar Award",
+            "url": "https://example.org/fulbright/scholar",
+            "award_description": "Exchange award for visiting scholars.",
+            "host_country": "United States",
+        }
+    )
+    msca = get_source_connector("msca").normalize(
+        {
+            "title": "Postdoctoral Fellowships",
+            "url": "https://example.org/msca/postdoc",
+            "callAbstract": "Horizon Europe fellowship call.",
+            "deadlineDate": "2026-09-10",
+        }
+    )
+
+    assert euraxess.opportunity_type.value == "research_position"
+    assert euraxess.url == "https://example.org/euraxess/apply"
+    assert euraxess.countries == ["France"]
+    assert "euraxess" in euraxess.keywords
+    assert daad.countries == ["Germany"]
+    assert daad.deadline == "2026-10-01"
+    assert fulbright.countries == ["United States"]
+    assert "exchange" in fulbright.keywords
+    assert msca.countries == ["European Union"]
+    assert "horizon europe" in msca.keywords

@@ -1,0 +1,20 @@
+Version 1, light manual test:
+- When signing up and new passwords is to easy - error field says "[object] [object]"
+- Active profile dropdown shows nothing if name is not set (and should we have this option to quickly change account anyway?)
+- Add hover and click effects
+- On main page all buttons except Details (save, plan, ignore) seems to do nothing until we have profile name set
+- If have apply filters button - remove filters also should be
+- If after filters nothing was found show some info like "try looking for X" and not just empty screen
+- Not sure what in source and country could be put, should be some hints while typing
+- "Signed in as X" should no t be always displyed, or maybe near the sign out button
+- In profile editor the email should not be changeble - it is linked to the account
+- Disciplines, coutry and so on also should have hints or even just dropdown selections of what we have in database
+- Profile errors also show "[object] [object]"
+- Add some hover "?" around ORCID Import and OpenAlex Enrichment to explain what it is, and what it will be used for in this app
+- whats the difference between saved and planned?.. also after clicking those buttons the page refreshes crankily
+- in reminders lets have an option to create reminder only if the opportunity is saved/planned, also add "?" hints there too; same for Application Assistant
+- not sure i understand why we have this pending->complete button, just why
+- also Minimum alert score - whats that, hints and explanations
+- whats Load notifications
+- those windows like "Notification preferences saved" are persistent across the pages, we do not need them so so long, it should be smoothly after the button click displayed somewhere and dissapear
+- Application Assistant as i understand is not finished yet, as it shows almost same text for all opportunities

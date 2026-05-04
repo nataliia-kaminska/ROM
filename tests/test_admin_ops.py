@@ -72,3 +72,66 @@ def test_admin_duplicate_merge_moves_status_records(client):
 
     statuses = client.get(f"/profiles/{profile['id']}/opportunities/statuses").json()
     assert statuses[0]["opportunity_id"] == target["id"]
+
+
+def test_admin_duplicate_merge_handles_status_and_reminder_conflicts(client):
+    profile = client.post(
+        "/profiles",
+        json={"full_name": "Conflict Merge User", "career_stage": "postdoc"},
+    ).json()
+    target = client.post(
+        "/opportunities",
+        json={
+            "title": "Conflict Grant",
+            "opportunity_type": "grant",
+            "source": "source_a",
+            "url": "https://example.org/conflict-a",
+            "deadline": "2026-08-01",
+        },
+    ).json()
+    duplicate = client.post(
+        "/opportunities",
+        json={
+            "title": "Conflict Grant",
+            "opportunity_type": "grant",
+            "source": "source_a",
+            "url": "https://example.org/conflict-b",
+            "deadline": "2026-08-01",
+        },
+    ).json()
+    client.put(
+        f"/profiles/{profile['id']}/opportunities/{target['id']}/status",
+        json={"status": "saved", "notes": "target note"},
+    )
+    client.put(
+        f"/profiles/{profile['id']}/opportunities/{duplicate['id']}/status",
+        json={"status": "planned", "notes": "duplicate note"},
+    )
+    client.post(
+        f"/profiles/{profile['id']}/reminders",
+        json={"opportunity_id": target["id"], "remind_on": "2026-07-01", "message": "target reminder"},
+    )
+    client.post(
+        f"/profiles/{profile['id']}/reminders",
+        json={"opportunity_id": duplicate["id"], "remind_on": "2026-07-01", "message": "duplicate reminder"},
+    )
+
+    merged = client.post(
+        "/admin/opportunities/merge",
+        json={"target_opportunity_id": target["id"], "duplicate_opportunity_ids": [duplicate["id"]]},
+    )
+
+    assert merged.status_code == 200
+    statuses = client.get(f"/profiles/{profile['id']}/opportunities/statuses").json()
+    assert len(statuses) == 1
+    assert statuses[0]["opportunity_id"] == target["id"]
+    assert statuses[0]["status"] == "planned"
+    assert "target note" in statuses[0]["notes"]
+    assert "duplicate note" in statuses[0]["notes"]
+
+    reminders = client.get(f"/profiles/{profile['id']}/reminders", params={"include_completed": True}).json()
+    custom_reminders = [reminder for reminder in reminders if reminder["remind_on"] == "2026-07-01"]
+    assert len(custom_reminders) == 1
+    assert custom_reminders[0]["opportunity_id"] == target["id"]
+    assert "target reminder" in custom_reminders[0]["message"]
+    assert "duplicate reminder" in custom_reminders[0]["message"]

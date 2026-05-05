@@ -47,4 +47,7 @@ def test_application_assistant_generates_notes_and_warnings(client):
     assert "AI Fellowship" in body["research_fit_statement"]
     assert "degrees" in body["missing_profile_fields"]
     assert any("Career stage" in warning for warning in body["eligibility_warnings"])
+    assert body["advisor_provider"] == "deterministic"
+    assert "AI Fellowship" in body["advisor_memo"]
     assert "## Checklist" in body["exported_notes"]
+    assert "## Advisor Memo" in body["exported_notes"]

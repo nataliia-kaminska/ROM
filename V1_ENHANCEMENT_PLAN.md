@@ -219,6 +219,7 @@ Status:
 - Application readiness score and gap analysis are generated for each opportunity/profile pair.
 - Recommendations now include readiness score, strengths, and gaps.
 - Application Assistant output and export notes include readiness, strengths, and gaps.
+- Application Assistant now keeps deterministic facts as the source of truth and can optionally use Groq or a local OpenAI-compatible model to generate a polished advisor memo.
 - Tests cover parser extraction, sparse-metadata recommendation scoring, and assistant gap analysis.
 
 ## Milestone 3: Real Notifications
@@ -299,6 +300,13 @@ Acceptance criteria:
 - Admin users can access admin APIs.
 - Legacy MVP anonymous paths are intentionally documented or removed.
 
+Status:
+
+- `/admin/*` routes now require authenticated admin users.
+- `/jobs/*` queue visibility/enqueue/retry routes now require authenticated admin users.
+- Frontend admin/job calls now send the signed-in token.
+- Tests cover researcher denial and admin access.
+
 ### 4.2 Request IDs and Error Envelopes
 
 Add professional API behavior.
@@ -326,6 +334,12 @@ Acceptance criteria:
 - All handled HTTP errors use the envelope.
 - Unexpected exceptions include request id.
 - Tests verify response shape and header.
+
+Status:
+
+- Request middleware now assigns or echoes `X-Request-ID` and logs it.
+- HTTP and validation errors now return a standard `{ "error": { "code", "message", "request_id" } }` envelope.
+- Tests cover request id propagation, not found errors, validation errors, and admin forbidden errors.
 
 ### 4.3 Rate Limiting and External API Safety
 

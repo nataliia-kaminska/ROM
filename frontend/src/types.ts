@@ -161,5 +161,7 @@ export type ApplicationAssistantResult = {
   readiness_score: number;
   gap_analysis: string[];
   strengths: string[];
+  advisor_provider: string;
+  advisor_memo: string;
   exported_notes: string;
 };

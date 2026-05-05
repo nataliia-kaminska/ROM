@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = False
     weekly_digest_interval_seconds: int = 604800
     high_match_alert_interval_seconds: int = 3600
+    advisor_provider: str = "deterministic"
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.1-8b-instant"
+    advisor_local_base_url: str = "http://localhost:11434/v1"
+    advisor_local_model: str = "llama3.1:8b"
+    advisor_timeout_seconds: int = 20
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

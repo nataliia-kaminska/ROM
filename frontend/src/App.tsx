@@ -764,9 +764,10 @@ function App() {
   }
 
   async function loadAdminOps() {
+    if (!token) return;
     setError("");
     try {
-      const [dashboard, audit, duplicates] = await Promise.all([api.adminDashboard(), api.adminAuditLog(), api.adminDuplicates()]);
+      const [dashboard, audit, duplicates] = await Promise.all([api.adminDashboard(token), api.adminAuditLog(token), api.adminDuplicates(token)]);
       setAdminData(dashboard);
       setAuditLog(audit);
       setDuplicateGroups(duplicates);
@@ -849,9 +850,10 @@ function App() {
 
   async function enqueueGrantsGov(event: FormEvent) {
     event.preventDefault();
+    if (!token) return;
     setError("");
     try {
-      const result = await api.enqueueGrantsGov(grantsForm);
+      const result = await api.enqueueGrantsGov(token, grantsForm);
       setJobForm({ job_id: result.job_id, queue_name: result.queue });
       setNotice(`Queued Grants.gov job ${result.job_id}`);
       await loadQueues();
@@ -861,9 +863,10 @@ function App() {
   }
 
   async function enqueueReminderScan() {
+    if (!token) return;
     setError("");
     try {
-      const result = await api.enqueueReminderScan();
+      const result = await api.enqueueReminderScan(token);
       setJobForm({ job_id: result.job_id, queue_name: result.queue });
       setNotice(`Queued reminder scan ${result.job_id}`);
       await loadQueues();
@@ -873,9 +876,10 @@ function App() {
   }
 
   async function enqueueEmbeddingRefresh() {
+    if (!token) return;
     setError("");
     try {
-      const result = await api.enqueueEmbeddingRefresh();
+      const result = await api.enqueueEmbeddingRefresh(token);
       setJobForm({ job_id: result.job_id, queue_name: result.queue });
       setNotice(`Queued embedding refresh ${result.job_id}`);
       await loadQueues();
@@ -885,9 +889,10 @@ function App() {
   }
 
   async function loadQueues() {
+    if (!token) return;
     setError("");
     try {
-      setQueueStats(await api.queues());
+      setQueueStats(await api.queues(token));
     } catch (jobError) {
       setError((jobError as Error).message);
     }
@@ -895,9 +900,10 @@ function App() {
 
   async function loadJob(event: FormEvent) {
     event.preventDefault();
+    if (!token) return;
     setError("");
     try {
-      setJobDetail(await api.job(jobForm.job_id, jobForm.queue_name));
+      setJobDetail(await api.job(token, jobForm.job_id, jobForm.queue_name));
     } catch (jobError) {
       setError((jobError as Error).message);
     }
@@ -1298,6 +1304,13 @@ function App() {
             )}
             {assistantResult && (
               <div className="assistant-grid separated">
+                <section className="span-2 advisor-memo">
+                  <div className="card-head">
+                    <h3>Advisor Memo</h3>
+                    <span>{assistantResult.advisor_provider}</span>
+                  </div>
+                  <p>{assistantResult.advisor_memo}</p>
+                </section>
                 <section className="span-2">
                   <h3>Readiness</h3>
                   <div className="completeness">
@@ -1410,10 +1423,10 @@ function App() {
                   <button className="secondary" onClick={() => void enqueueReminderScan()}>
                     Queue reminder scan
                   </button>
-                  <button className="secondary" onClick={() => void api.enqueueWeeklyDigest().then((job) => { setJobForm({ job_id: job.job_id, queue_name: job.queue }); setNotice(`Queued weekly digest ${job.job_id}`); void loadQueues(); }).catch((err) => setError((err as Error).message))}>
+                  <button className="secondary" onClick={() => token && void api.enqueueWeeklyDigest(token).then((job) => { setJobForm({ job_id: job.job_id, queue_name: job.queue }); setNotice(`Queued weekly digest ${job.job_id}`); void loadQueues(); }).catch((err) => setError((err as Error).message))}>
                     Queue digest
                   </button>
-                  <button className="secondary" onClick={() => void api.enqueueHighMatchAlerts().then((job) => { setJobForm({ job_id: job.job_id, queue_name: job.queue }); setNotice(`Queued high-match alerts ${job.job_id}`); void loadQueues(); }).catch((err) => setError((err as Error).message))}>
+                  <button className="secondary" onClick={() => token && void api.enqueueHighMatchAlerts(token).then((job) => { setJobForm({ job_id: job.job_id, queue_name: job.queue }); setNotice(`Queued high-match alerts ${job.job_id}`); void loadQueues(); }).catch((err) => setError((err as Error).message))}>
                     Queue alerts
                   </button>
                   <button className="secondary" onClick={() => void enqueueEmbeddingRefresh()}>
@@ -1525,6 +1538,8 @@ function App() {
                     <p>{assistantResult.research_fit_statement}</p>
                     <h3>Readiness</h3>
                     <p>{assistantResult.readiness_score}% application readiness</p>
+                    <h3>Advisor Memo</h3>
+                    <p>{assistantResult.advisor_memo}</p>
                     <h3>Warnings</h3>
                     <ul className="reasons">{(assistantResult.eligibility_warnings.length ? assistantResult.eligibility_warnings : ["None flagged"]).map((item) => <li key={item}>{item}</li>)}</ul>
                     <h3>Gaps</h3>

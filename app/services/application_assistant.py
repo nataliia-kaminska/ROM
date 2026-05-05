@@ -2,6 +2,7 @@ from datetime import date
 
 from app.db.models import Opportunity, ResearcherProfile, ResearcherProfileDetails
 from app.schemas.application_assistant import ApplicationAssistantRead
+from app.services.advisor_provider import AdvisorFacts, get_advisor_provider
 from app.services.requirements import build_gap_analysis, extract_opportunity_requirements
 from app.services.serialization import unpack_list
 
@@ -17,7 +18,24 @@ def build_application_assistant(
     checklist = _checklist(opportunity, warnings)
     outline = _motivation_outline(profile, opportunity)
     fit_statement = _fit_statement(profile, opportunity, details)
-    notes = _export_notes(profile, opportunity, checklist, outline, fit_statement, missing_fields, warnings, gaps)
+    advisor_provider = get_advisor_provider()
+    advisor_memo = advisor_provider.generate_memo(
+        AdvisorFacts(
+            profile_name=profile.full_name,
+            opportunity_title=opportunity.title,
+            opportunity_type=opportunity.opportunity_type.value,
+            deadline=opportunity.deadline.isoformat() if opportunity.deadline else "",
+            readiness_score=gaps.readiness_score,
+            strengths=gaps.strengths,
+            gaps=gaps.gaps,
+            warnings=warnings,
+            missing_fields=missing_fields,
+            checklist=checklist,
+            motivation_outline=outline,
+            fit_statement=fit_statement,
+        )
+    )
+    notes = _export_notes(profile, opportunity, checklist, outline, fit_statement, missing_fields, warnings, gaps, advisor_memo)
     return ApplicationAssistantRead(
         opportunity_id=opportunity.id,
         profile_id=profile.id,
@@ -29,6 +47,8 @@ def build_application_assistant(
         readiness_score=gaps.readiness_score,
         gap_analysis=gaps.gaps,
         strengths=gaps.strengths,
+        advisor_provider=advisor_provider.name,
+        advisor_memo=advisor_memo,
         exported_notes=notes,
     )
 
@@ -141,6 +161,7 @@ def _export_notes(
     missing: list[str],
     warnings: list[str],
     gaps,
+    advisor_memo: str,
 ) -> str:
     sections = [
         f"# Application Notes: {opportunity.title}",
@@ -165,5 +186,8 @@ def _export_notes(
         f"Readiness score: {gaps.readiness_score}",
         *[f"- Strength: {item}" for item in (gaps.strengths or ["None flagged"])],
         *[f"- Gap: {item}" for item in (gaps.gaps or ["None flagged"])],
+        "",
+        "## Advisor Memo",
+        advisor_memo,
     ]
     return "\n".join(sections)

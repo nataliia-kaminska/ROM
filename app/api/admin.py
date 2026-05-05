@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_optional_current_user
+from app.api.dependencies import require_admin
 from app.api.opportunities import _to_read
 from app.db.models import (
     AdminAuditLog,
@@ -22,7 +22,7 @@ from app.services.admin_ops import build_admin_analytics, duplicate_groups, log_
 from app.services.opportunity_import import apply_opportunity_payload
 
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
 
 @router.get("/dashboard", response_model=AdminDashboardRead)
@@ -67,7 +67,7 @@ def duplicates(db: Session = Depends(get_db)) -> list[DuplicateOpportunityGroup]
 def merge_duplicates(
     payload: DuplicateMergeRequest,
     db: Session = Depends(get_db),
-    current_user=Depends(get_optional_current_user),
+    current_user=Depends(require_admin),
 ) -> OpportunityRead:
     target = db.get(Opportunity, payload.target_opportunity_id)
     if target is None:
@@ -169,7 +169,7 @@ def edit_opportunity(
     opportunity_id: int,
     payload: OpportunityCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(get_optional_current_user),
+    current_user=Depends(require_admin),
 ) -> OpportunityRead:
     opportunity = db.get(Opportunity, opportunity_id)
     if opportunity is None:

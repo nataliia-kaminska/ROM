@@ -180,14 +180,14 @@ export const api = {
       "/ingestion/grants-gov/search",
       { method: "POST", body },
     ),
-  enqueueGrantsGov: (body: { keyword: string; limit: number; import_results: boolean }) =>
-    request<JobSummary>("/jobs/ingestion/grants-gov", { method: "POST", body }),
-  enqueueReminderScan: () => request<JobSummary>("/jobs/reminders/scan", { method: "POST" }),
-  enqueueWeeklyDigest: () => request<JobSummary>("/jobs/notifications/weekly-digest", { method: "POST" }),
-  enqueueHighMatchAlerts: () => request<JobSummary>("/jobs/notifications/high-match-alerts", { method: "POST" }),
-  enqueueEmbeddingRefresh: () => request<JobSummary>("/jobs/embeddings/refresh", { method: "POST" }),
-  queues: () => request<QueueStats[]>("/jobs"),
-  job: (jobId: string, queueName?: string) => request<Record<string, unknown>>(`/jobs/${jobId}`, { query: { queue_name: queueName } }),
+  enqueueGrantsGov: (token: string, body: { keyword: string; limit: number; import_results: boolean }) =>
+    request<JobSummary>("/jobs/ingestion/grants-gov", { token, method: "POST", body }),
+  enqueueReminderScan: (token: string) => request<JobSummary>("/jobs/reminders/scan", { token, method: "POST" }),
+  enqueueWeeklyDigest: (token: string) => request<JobSummary>("/jobs/notifications/weekly-digest", { token, method: "POST" }),
+  enqueueHighMatchAlerts: (token: string) => request<JobSummary>("/jobs/notifications/high-match-alerts", { token, method: "POST" }),
+  enqueueEmbeddingRefresh: (token: string) => request<JobSummary>("/jobs/embeddings/refresh", { token, method: "POST" }),
+  queues: (token: string) => request<QueueStats[]>("/jobs", { token }),
+  job: (token: string, jobId: string, queueName?: string) => request<Record<string, unknown>>(`/jobs/${jobId}`, { token, query: { queue_name: queueName } }),
   notifications: (token: string, includeRead = false) =>
     request<NotificationItem[]>("/notifications", { token, query: { include_read: includeRead } }),
   notificationPreferences: (token: string) => request<NotificationPreference>("/notifications/preferences", { token }),
@@ -197,10 +197,10 @@ export const api = {
     request<NotificationItem>(`/notifications/${notificationId}/read`, { token, method: "PUT" }),
   unsubscribeNotifications: (token: string) =>
     request<NotificationPreference>("/notifications/unsubscribe", { token, method: "POST" }),
-  adminDashboard: () => request<Record<string, unknown>>("/admin/dashboard"),
-  adminAnalytics: () => request<Record<string, unknown>>("/admin/analytics"),
-  adminAuditLog: () => request<Record<string, unknown>[]>("/admin/audit-log"),
-  adminDuplicates: () => request<Record<string, unknown>[]>("/admin/opportunities/duplicates"),
+  adminDashboard: (token: string) => request<Record<string, unknown>>("/admin/dashboard", { token }),
+  adminAnalytics: (token: string) => request<Record<string, unknown>>("/admin/analytics", { token }),
+  adminAuditLog: (token: string) => request<Record<string, unknown>[]>("/admin/audit-log", { token }),
+  adminDuplicates: (token: string) => request<Record<string, unknown>[]>("/admin/opportunities/duplicates", { token }),
   applicationAssistant: (token: string, body: { profile_id: number; opportunity_id: number }) =>
     request<ApplicationAssistantResult>("/application-assistant", { token, method: "POST", body }),
   bulkImport: (body: { source: string; dry_run: boolean; opportunities: OpportunityPayload[] }) =>

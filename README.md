@@ -390,6 +390,9 @@ Completed foundation items:
 - Structured request logging.
 - Environment-specific settings through `.env`.
 - CORS configuration for the future frontend.
+- Request IDs are returned through `X-Request-ID`.
+- Handled API errors use a standard `{ "error": { "code", "message", "request_id" } }` envelope.
+- Admin and job queue APIs require authenticated admin users.
 
 Known Phase 1 limitations:
 
@@ -650,6 +653,9 @@ Current Phase 10 status:
 - Application assistant service added.
 - `/application-assistant` generates an application checklist, motivation letter outline, research fit statement, missing profile field suggestions, eligibility warnings, and exportable notes.
 - Assistant uses profile details, opportunity metadata, deadlines, countries, career stage, and unavailable countries.
+- Assistant now builds deterministic readiness/gap facts first, then generates an advisor memo through `ADVISOR_PROVIDER`.
+- `ADVISOR_PROVIDER=deterministic` is the default and requires no network access.
+- `ADVISOR_PROVIDER=groq` uses Groq when `GROQ_API_KEY` is set; `ADVISOR_PROVIDER=local` uses an OpenAI-compatible local endpoint such as Ollama or LM Studio.
 - Frontend application assistant tab added.
 - Exportable Markdown-style notes are displayed in the app for application prep.
 

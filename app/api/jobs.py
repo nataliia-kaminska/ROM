@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from redis.exceptions import RedisError
 from rq import Queue, Retry
 from rq.job import Job
 from rq.registry import DeferredJobRegistry, FailedJobRegistry, FinishedJobRegistry, StartedJobRegistry
 
+from app.api.dependencies import require_admin
 from app.schemas.ingestion import GrantsGovSearchRequest
 from app.schemas.jobs import JobEnqueueRead, JobRead, QueueStatsRead
 from app.workers.jobs import (
@@ -16,7 +17,7 @@ from app.workers.jobs import (
 from app.workers.queues import EMBEDDINGS_QUEUE, INGESTION_QUEUE, QUEUE_NAMES, REMINDERS_QUEUE, get_queue
 
 
-router = APIRouter(prefix="/jobs", tags=["jobs"])
+router = APIRouter(prefix="/jobs", tags=["jobs"], dependencies=[Depends(require_admin)])
 
 
 def _queue_unavailable(exc: Exception) -> HTTPException:

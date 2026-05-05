@@ -17,4 +17,6 @@ class ApplicationAssistantRead(BaseModel):
     readiness_score: int = 0
     gap_analysis: list[str] = []
     strengths: list[str] = []
+    advisor_provider: str = "deterministic"
+    advisor_memo: str = ""
     exported_notes: str

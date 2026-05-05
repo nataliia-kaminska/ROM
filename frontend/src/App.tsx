@@ -19,6 +19,7 @@ const careerStages: CareerStage[] = ["bachelor", "master", "phd", "postdoc", "ea
 const opportunityTypes: OpportunityType[] = ["grant", "exchange", "fellowship", "internship", "research_position", "training"];
 const trackedStatuses: OpportunityStatus[] = ["saved", "planned", "applied", "accepted", "rejected", "ignored"];
 const reminderStatuses: OpportunityStatus[] = ["saved", "planned"];
+const researcherViews = ["dashboard", "feed", "profile", "board", "assistant", "reminders", "notifications"] as const;
 
 const defaultFilters = {
   keyword: "",
@@ -31,7 +32,7 @@ const defaultFilters = {
   include_ignored: false,
 };
 
-type View = "feed" | "profile" | "orcid" | "board" | "reminders" | "notifications" | "assistant" | "admin";
+type View = "dashboard" | "feed" | "profile" | "board" | "reminders" | "notifications" | "assistant" | "admin";
 
 const blankProfile: ProfilePayload = {
   full_name: "",
@@ -86,6 +87,40 @@ function joinList(value: string[] | undefined): string {
 function label(value: string): string {
   return value.replaceAll("_", " ");
 }
+
+function viewLabel(value: View): string {
+  const labels: Record<View, string> = {
+    dashboard: "Dashboard",
+    feed: "Matches",
+    profile: "Profile",
+    board: "Application Board",
+    assistant: "Apply Assistant",
+    reminders: "Reminders",
+    notifications: "Notifications",
+    admin: "Admin",
+  };
+  return labels[value];
+}
+
+function statusHelp(status: OpportunityStatus): string {
+  const descriptions: Record<OpportunityStatus, string> = {
+    saved: "Interesting, maybe later.",
+    planned: "You intend to apply.",
+    applied: "Application submitted.",
+    accepted: "Accepted or awarded.",
+    rejected: "Not selected.",
+    ignored: "Hidden and used as ranking feedback.",
+  };
+  return descriptions[status];
+}
+
+const detailTabLabels = {
+  overview: "Overview",
+  reasons: "Why it matches",
+  eligibility: "Requirements",
+  assistant: "Apply plan",
+  reminders: "Reminders",
+} as const;
 
 function profileLabel(profile: Profile, fallbackEmail?: string): string {
   return profile.full_name || profile.email || fallbackEmail || `Profile ${profile.id}`;
@@ -356,7 +391,7 @@ function App() {
   const [authForm, setAuthForm] = useState({ email: "", password: "", full_name: "" });
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<number | null>(null);
-  const [view, setView] = useState<View>("feed");
+  const [view, setView] = useState<View>("dashboard");
   const [loading, setLoading] = useState(false);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [notice, setNotice] = useState("");
@@ -938,6 +973,38 @@ function App() {
     () => [...new Set([...opportunitiesById.values()].flatMap((opportunity) => [...opportunity.keywords, ...opportunity.disciplines]).filter(Boolean))].sort(),
     [opportunitiesById],
   );
+  const visibleViews = useMemo(
+    () => (user?.role === "admin" ? [...researcherViews, "admin" as const] : [...researcherViews]),
+    [user?.role],
+  );
+  const topMatches = useMemo(() => recommendations.slice(0, 3), [recommendations]);
+  const plannedStatuses = useMemo(
+    () => statuses.filter((status) => ["planned", "applied"].includes(status.status)),
+    [statuses],
+  );
+  const nextReminder = useMemo(
+    () => reminders.filter((reminder) => reminder.status === "pending").sort((a, b) => a.remind_on.localeCompare(b.remind_on))[0] ?? null,
+    [reminders],
+  );
+  const nextAction = useMemo(() => {
+    if (!activeProfile) return { title: "Create your research profile", detail: "Start with career stage, country, disciplines, and keywords.", target: "profile" as View };
+    if (!activeProfile.country || activeProfile.disciplines.length === 0 || activeProfile.keywords.length === 0) {
+      return { title: "Complete your profile basics", detail: "Country, disciplines, and keywords make the match explanations much better.", target: "profile" as View };
+    }
+    if (!detailsForm.research_summary || detailsForm.publications.length === 0) {
+      return { title: "Add evidence for readiness scoring", detail: "Research summary and publications improve advisor gaps and fit statements.", target: "profile" as View };
+    }
+    if (topMatches.length > 0 && plannedStatuses.length === 0) {
+      return { title: "Review your strongest matches", detail: `Start with ${topMatches[0].opportunity.title}. Save or plan anything worth applying to.`, target: "feed" as View };
+    }
+    if (reminderEligibleOpportunities.length > 0 && !assistantResult) {
+      return { title: "Generate an advisor memo", detail: "Use the Apply Assistant for one saved or planned opportunity.", target: "assistant" as View };
+    }
+    if (nextReminder) {
+      return { title: "Check your next deadline reminder", detail: `${opportunitiesById.get(nextReminder.opportunity_id)?.title ?? "Opportunity"} on ${nextReminder.remind_on}.`, target: "reminders" as View };
+    }
+    return { title: "Keep refining matches", detail: "Review new opportunities, ignore poor fits, and plan applications from the board.", target: "feed" as View };
+  }, [activeProfile, assistantResult, detailsForm, nextReminder, opportunitiesById, plannedStatuses.length, reminderEligibleOpportunities.length, topMatches]);
 
   if (!token || !user) {
     return (
@@ -978,9 +1045,9 @@ function App() {
           </div>
         </div>
         <nav>
-          {(["feed", "profile", "orcid", "board", "reminders", "notifications", "assistant", "admin"] as View[]).map((item) => (
+          {visibleViews.map((item) => (
             <button key={item} className={view === item ? "active" : ""} onClick={() => setView(item)}>
-              {label(item)}
+              {viewLabel(item)}
             </button>
           ))}
         </nav>
@@ -1006,7 +1073,7 @@ function App() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">{user.role}</p>
+            <p className="eyebrow">{viewLabel(view)}</p>
             <h1>{activeProfile ? profileLabel(activeProfile, user.email) : "Create your first profile"}</h1>
           </div>
           <ActionButton busy={workspaceLoading} variant="secondary" type="button" onClick={() => void refreshWorkspace(activeProfile)}>
@@ -1018,12 +1085,73 @@ function App() {
         {notice && <div className="alert success">{notice}</div>}
         {error && <div className="alert error">{error}</div>}
 
+        {view === "dashboard" && (
+          <section className="dashboard-grid">
+            <article className="panel next-action">
+              <p className="eyebrow">Next best action</p>
+              <h2>{nextAction.title}</h2>
+              <p>{nextAction.detail}</p>
+              <button className="primary" onClick={() => setView(nextAction.target)}>
+                Go there
+              </button>
+            </article>
+            <article className="panel metric-panel">
+              <span>Top matches</span>
+              <strong>{topMatches.length}</strong>
+              <p className="muted">High-signal opportunities ready for review.</p>
+            </article>
+            <article className="panel metric-panel">
+              <span>In application plan</span>
+              <strong>{plannedStatuses.length}</strong>
+              <p className="muted">Planned or submitted opportunities.</p>
+            </article>
+            <article className="panel metric-panel">
+              <span>Next reminder</span>
+              <strong>{nextReminder?.remind_on ?? "None"}</strong>
+              <p className="muted">{nextReminder ? opportunitiesById.get(nextReminder.opportunity_id)?.title ?? "Opportunity reminder" : "Plan an opportunity to start reminders."}</p>
+            </article>
+            <section className="panel span-2">
+              <div className="section-title">
+                <div>
+                  <h2>Strongest Matches</h2>
+                  <p>Review these first, then save, plan, or ignore to teach the system.</p>
+                </div>
+                <button className="secondary" onClick={() => setView("feed")}>
+                  Open matches
+                </button>
+              </div>
+              <div className="cards compact-cards">
+                {topMatches.map((item) => (
+                  <OpportunityCard
+                    key={item.opportunity.id}
+                    item={item}
+                    canTrack={Boolean(activeProfile)}
+                    onSelect={() => setSelectedOpportunity(item.opportunity)}
+                    onStatus={(status) => void updateStatus(item.opportunity.id, status)}
+                  />
+                ))}
+                {topMatches.length === 0 && <EmptyState title="No matches yet" detail="Complete your profile or import opportunities, then refresh the workspace." />}
+              </div>
+            </section>
+            <section className="panel">
+              <h2>How This Flows</h2>
+              <div className="flow-steps">
+                <span>1. Profile</span>
+                <span>2. Matches</span>
+                <span>3. Save or plan</span>
+                <span>4. Advisor memo</span>
+                <span>5. Board and reminders</span>
+              </div>
+            </section>
+          </section>
+        )}
+
         {view === "feed" && (
           <section className="panel">
             <div className="section-title">
               <div>
-                <h2>Opportunity Feed</h2>
-                <p>Recommended matches appear first when a profile is selected.</p>
+                <h2>Matches</h2>
+                <p>Recommended opportunities appear first. Use Save, Plan, or Ignore to make future results smarter.</p>
               </div>
             </div>
             <div className="filters">
@@ -1117,11 +1245,11 @@ function App() {
           </section>
         )}
 
-        {view === "orcid" && (
+        {view === "profile" && (
           <section className="panel">
             <div className="section-title">
               <div className="title-with-help">
-                <h2>ORCID Import</h2>
+                <h2>Profile Imports</h2>
                 <HelpTip text="ORCID is a public researcher identifier. This app uses it to prefill your profile and improve matching with public academic metadata." />
               </div>
             </div>
@@ -1153,7 +1281,10 @@ function App() {
           <section className="board">
             {trackedStatuses.map((status) => (
               <div className="lane" key={status}>
-                <h2>{label(status)}</h2>
+                <div>
+                  <h2>{label(status)}</h2>
+                  <small>{statusHelp(status)}</small>
+                </div>
                 {statuses
                   .filter((record) => record.status === status)
                   .map((record) => opportunitiesById.get(record.opportunity_id))
@@ -1279,7 +1410,7 @@ function App() {
             <div className="section-title">
               <div>
                 <div className="title-with-help">
-                  <h2>Application Assistant</h2>
+                  <h2>Apply Assistant</h2>
                   <HelpTip text="Save or plan an opportunity first, then generate structured notes for that specific application." />
                 </div>
                 <p>Generate a checklist, motivation outline, fit statement, eligibility warnings, and exportable notes.</p>
@@ -1491,7 +1622,7 @@ function App() {
             <div className="tabs">
               {(["overview", "reasons", "eligibility", "assistant", "reminders"] as const).map((tab) => (
                 <button className={detailTab === tab ? "active" : ""} key={tab} onClick={() => setDetailTab(tab)}>
-                  {label(tab)}
+                  {detailTabLabels[tab]}
                 </button>
               ))}
             </div>
@@ -1577,7 +1708,7 @@ function App() {
             </a>
             <div className="actions">
               {trackedStatuses.map((status) => (
-                <button key={status} className="secondary" onClick={() => void updateStatus(selectedOpportunity.id, status)}>
+                <button key={status} className="secondary" title={statusHelp(status)} onClick={() => void updateStatus(selectedOpportunity.id, status)}>
                   {label(status)}
                 </button>
               ))}

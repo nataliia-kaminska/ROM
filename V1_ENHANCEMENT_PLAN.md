@@ -477,7 +477,11 @@ Status:
 
 - Recommendation feed now shows skeleton cards while workspace data refreshes.
 - Profile completeness indicator added above the main workspace.
+- Dashboard is now the default workspace with next-best-action guidance, top matches, application-plan metrics, reminder visibility, and a simple flow map.
+- Navigation now uses user-facing labels, keeps admin tools visible only for admins, and folds ORCID/OpenAlex imports into Profile.
 - Opportunity details now use tabs for overview, match reasons, eligibility, application assistant, and reminders.
+- Opportunity detail tabs now use clearer labels like "Why it matches", "Requirements", and "Apply plan".
+- Statuses now include explanatory help text in the board and detail actions.
 - Score breakdowns now render as compact bars in the opportunity detail drawer.
 - Frontend styling was expanded for polished tabs, loading indicators, compact rows, JSON editing, and responsive layouts.
 

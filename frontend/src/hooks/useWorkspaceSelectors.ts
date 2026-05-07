@@ -1,0 +1,119 @@
+import { useMemo } from "react";
+import type { ProfileDetailsPayload } from "../api";
+import { reminderStatuses, researcherViews, type View } from "../constants";
+import type { ApplicationAssistantResult, Opportunity, Profile, Recommendation, Reminder, StatusRecord, User } from "../types";
+
+export function useWorkspaceSelectors({
+  activeProfileId,
+  profiles,
+  recommendations,
+  opportunities,
+  selectedOpportunity,
+  statuses,
+  reminders,
+  user,
+  detailsForm,
+  assistantResult,
+}: {
+  activeProfileId: number | null;
+  profiles: Profile[];
+  recommendations: Recommendation[];
+  opportunities: Opportunity[];
+  selectedOpportunity: Opportunity | null;
+  statuses: StatusRecord[];
+  reminders: Reminder[];
+  user: User | null;
+  detailsForm: ProfileDetailsPayload;
+  assistantResult: ApplicationAssistantResult | null;
+}) {
+  const activeProfile = useMemo(
+    () => profiles.find((profile) => profile.id === activeProfileId) ?? profiles[0] ?? null,
+    [activeProfileId, profiles],
+  );
+  const selectedRecommendation = useMemo(
+    () => recommendations.find((item) => item.opportunity.id === selectedOpportunity?.id) ?? null,
+    [recommendations, selectedOpportunity],
+  );
+  const selectedOpportunityReminders = useMemo(
+    () => reminders.filter((reminder) => reminder.opportunity_id === selectedOpportunity?.id),
+    [reminders, selectedOpportunity],
+  );
+  const statusByOpportunity = useMemo(
+    () => new Map(statuses.map((status) => [status.opportunity_id, status])),
+    [statuses],
+  );
+  const opportunitiesById = useMemo(
+    () => new Map([...opportunities, ...recommendations.map((item) => item.opportunity)].map((item) => [item.id, item])),
+    [opportunities, recommendations],
+  );
+  const selectedStatusIds = useMemo(
+    () => new Set(statuses.filter((record) => reminderStatuses.includes(record.status)).map((record) => record.opportunity_id)),
+    [statuses],
+  );
+  const reminderEligibleOpportunities = useMemo(
+    () => [...opportunitiesById.values()].filter((opportunity) => selectedStatusIds.has(opportunity.id)),
+    [opportunitiesById, selectedStatusIds],
+  );
+  const sourceOptions = useMemo(
+    () => [...new Set([...opportunitiesById.values()].map((opportunity) => opportunity.source).filter(Boolean))].sort(),
+    [opportunitiesById],
+  );
+  const countryOptions = useMemo(
+    () => [...new Set([...opportunitiesById.values()].flatMap((opportunity) => opportunity.countries).filter(Boolean))].sort(),
+    [opportunitiesById],
+  );
+  const keywordOptions = useMemo(
+    () => [...new Set([...opportunitiesById.values()].flatMap((opportunity) => [...opportunity.keywords, ...opportunity.disciplines]).filter(Boolean))].sort(),
+    [opportunitiesById],
+  );
+  const visibleViews = useMemo(
+    () => (user?.role === "admin" ? [...researcherViews, "admin" as const] : [...researcherViews]),
+    [user?.role],
+  );
+  const topMatches = useMemo(() => recommendations.slice(0, 3), [recommendations]);
+  const plannedStatuses = useMemo(
+    () => statuses.filter((status) => ["planned", "applied"].includes(status.status)),
+    [statuses],
+  );
+  const nextReminder = useMemo(
+    () => reminders.filter((reminder) => reminder.status === "pending").sort((a, b) => a.remind_on.localeCompare(b.remind_on))[0] ?? null,
+    [reminders],
+  );
+  const nextAction = useMemo(() => {
+    if (!activeProfile) return { title: "Create your research profile", detail: "Start with career stage, country, disciplines, and keywords.", target: "profile" as View };
+    if (!activeProfile.country || activeProfile.disciplines.length === 0 || activeProfile.keywords.length === 0) {
+      return { title: "Complete your profile basics", detail: "Country, disciplines, and keywords make the match explanations much better.", target: "profile" as View };
+    }
+    if (!detailsForm.research_summary || detailsForm.publications.length === 0) {
+      return { title: "Add evidence for readiness scoring", detail: "Research summary and publications improve advisor gaps and fit statements.", target: "profile" as View };
+    }
+    if (topMatches.length > 0 && plannedStatuses.length === 0) {
+      return { title: "Review your strongest matches", detail: `Start with ${topMatches[0].opportunity.title}. Save or plan anything worth applying to.`, target: "feed" as View };
+    }
+    if (reminderEligibleOpportunities.length > 0 && !assistantResult) {
+      return { title: "Generate an advisor memo", detail: "Use the Apply Assistant for one saved or planned opportunity.", target: "assistant" as View };
+    }
+    if (nextReminder) {
+      return { title: "Check your next deadline reminder", detail: `${opportunitiesById.get(nextReminder.opportunity_id)?.title ?? "Opportunity"} on ${nextReminder.remind_on}.`, target: "reminders" as View };
+    }
+    return { title: "Keep refining matches", detail: "Review new opportunities, ignore poor fits, and plan applications from the board.", target: "feed" as View };
+  }, [activeProfile, assistantResult, detailsForm, nextReminder, opportunitiesById, plannedStatuses.length, reminderEligibleOpportunities.length, topMatches]);
+
+  return {
+    activeProfile,
+    selectedRecommendation,
+    selectedOpportunityReminders,
+    statusByOpportunity,
+    opportunitiesById,
+    selectedStatusIds,
+    reminderEligibleOpportunities,
+    sourceOptions,
+    countryOptions,
+    keywordOptions,
+    visibleViews,
+    topMatches,
+    plannedStatuses,
+    nextReminder,
+    nextAction,
+  };
+}

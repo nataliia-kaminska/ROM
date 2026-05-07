@@ -1,0 +1,86 @@
+import type { OpportunityPayload, ProfileDetailsPayload, ProfilePayload } from "./api";
+import type { CareerStage, OpportunityStatus, OpportunityType } from "./types";
+
+export const careerStages: CareerStage[] = ["bachelor", "master", "phd", "postdoc", "early_career", "senior"];
+export const opportunityTypes: OpportunityType[] = ["grant", "exchange", "fellowship", "internship", "research_position", "training"];
+export const trackedStatuses: OpportunityStatus[] = ["saved", "planned", "applied", "accepted", "rejected", "ignored"];
+export const reminderStatuses: OpportunityStatus[] = ["saved", "planned"];
+export const researcherViews = ["dashboard", "feed", "profile", "board", "assistant", "reminders", "notifications"] as const;
+
+export type View = "dashboard" | "feed" | "profile" | "board" | "reminders" | "notifications" | "assistant" | "admin";
+export type DetailTab = "overview" | "reasons" | "eligibility" | "assistant" | "reminders";
+
+export const viewRoutes: Record<View, string> = {
+  dashboard: "/dashboard",
+  feed: "/matches",
+  profile: "/profile",
+  board: "/board",
+  assistant: "/assistant",
+  reminders: "/reminders",
+  notifications: "/notifications",
+  admin: "/admin",
+};
+
+const routeViews = Object.fromEntries(Object.entries(viewRoutes).map(([view, path]) => [path, view])) as Record<string, View>;
+
+export function viewFromPath(pathname: string): View {
+  return routeViews[pathname] ?? "dashboard";
+}
+
+export const defaultFilters = {
+  keyword: "",
+  opportunity_type: "",
+  country: "",
+  career_stage: "",
+  source: "",
+  active_only: true,
+  min_score: 0,
+  include_ignored: false,
+};
+
+export const blankProfile: ProfilePayload = {
+  full_name: "",
+  email: "",
+  career_stage: "phd",
+  country: "",
+  disciplines: [],
+  keywords: [],
+  preferred_countries: [],
+  orcid_id: "",
+  google_scholar_url: "",
+  linkedin_url: "",
+};
+
+export const blankDetails: ProfileDetailsPayload = {
+  research_summary: "",
+  publications: [],
+  degrees: [],
+  languages: [],
+  funding_interests: [],
+  unavailable_countries: [],
+  preferred_opportunity_types: [],
+  min_duration_months: null,
+  max_duration_months: null,
+};
+
+export const blankOpportunity: OpportunityPayload = {
+  title: "",
+  opportunity_type: "grant",
+  source: "curated",
+  url: "",
+  summary: "",
+  eligibility: "",
+  disciplines: [],
+  keywords: [],
+  countries: [],
+  career_stages: [],
+  deadline: null,
+};
+
+export const detailTabLabels: Record<DetailTab, string> = {
+  overview: "Overview",
+  reasons: "Why it matches",
+  eligibility: "Requirements",
+  assistant: "Apply plan",
+  reminders: "Reminders",
+};

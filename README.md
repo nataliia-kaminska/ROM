@@ -154,10 +154,29 @@ make backend
 make frontend
 make worker
 make scheduler
+make run-full-app
 make test
 make migrate
 make docker-up
 make docker-down
+```
+
+Windows note: PowerShell does not ship with GNU Make, so `make` can fail with `The term 'make' is not recognized`.
+Either install Make through Chocolatey, Scoop, Git Bash/MSYS2, or WSL, or use the native runner:
+
+```powershell
+.\scripts\run-full-app.ps1
+```
+
+That starts the backend on `127.0.0.1:8000`, the frontend on `127.0.0.1:3000`, plus worker and scheduler windows.
+Worker and scheduler require Redis on `127.0.0.1:6379`. The runner checks for Redis and tries `docker compose up -d redis` if Docker is available. If Redis is still unavailable, backend/frontend start and background processes are skipped with a warning.
+
+Useful runner options:
+
+```powershell
+.\scripts\run-full-app.ps1 -RequireBackground  # fail if Redis is unavailable
+.\scripts\run-full-app.ps1 -NoDockerRedis      # do not try to start Redis through Docker
+.\scripts\run-full-app.ps1 -SkipWorker -SkipScheduler
 ```
 
 Run migrations:

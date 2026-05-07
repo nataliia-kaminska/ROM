@@ -1,4 +1,4 @@
-.PHONY: help setup venv backend frontend worker scheduler test test-backend test-frontend build migrate docker-up docker-down clean
+.PHONY: help setup venv backend frontend worker scheduler run-full-app test test-backend test-frontend build migrate docker-up docker-down clean
 
 PYTHON := ./.venv/Scripts/python.exe
 PIP := ./.venv/Scripts/pip.exe
@@ -11,6 +11,7 @@ help:
 	@echo "  make frontend       Run Vite frontend on 127.0.0.1:3000"
 	@echo "  make worker         Run RQ worker"
 	@echo "  make scheduler      Run background scheduler"
+	@echo "  make run-full-app   Run backend, frontend, worker, and scheduler"
 	@echo "  make test           Run backend tests and frontend build"
 	@echo "  make migrate        Apply Alembic migrations"
 	@echo "  make docker-up      Start full Docker stack"
@@ -34,6 +35,9 @@ worker:
 
 scheduler:
 	$(PYTHON) -m app.workers.scheduler
+
+run-full-app:
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-full-app.ps1
 
 test: test-backend test-frontend
 

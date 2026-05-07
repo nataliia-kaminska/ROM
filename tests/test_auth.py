@@ -52,6 +52,36 @@ def test_authenticated_profile_is_owned_and_visible_in_my_profiles(client):
     assert my_profiles_response.json()[0]["id"] == profile["id"]
 
 
+def test_owned_profile_can_be_updated(client):
+    auth = _register(client, "updater@example.com")
+    headers = {"Authorization": f"Bearer {auth['access_token']}"}
+    profile = client.post(
+        "/profiles",
+        json={"full_name": "Draft Researcher", "career_stage": "phd"},
+        headers=headers,
+    ).json()
+
+    response = client.put(
+        f"/profiles/{profile['id']}",
+        json={
+            "full_name": "Updated Researcher",
+            "career_stage": "postdoc",
+            "country": "Ukraine",
+            "disciplines": ["Computer Science", "Public Health"],
+            "keywords": ["machine learning", "clinical decision support"],
+            "preferred_countries": ["Germany"],
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    updated = response.json()
+    assert updated["id"] == profile["id"]
+    assert updated["full_name"] == "Updated Researcher"
+    assert updated["disciplines"] == ["Computer Science", "Public Health"]
+    assert set(updated["keywords"]) == {"machine learning", "clinical decision support"}
+
+
 def test_owned_profile_rejects_cross_user_access(client):
     owner = _register(client, "owner2@example.com")
     intruder = _register(client, "intruder@example.com")
@@ -76,4 +106,3 @@ def test_owned_profile_rejects_cross_user_access(client):
     assert denied_response.status_code == 403
     assert anonymous_response.status_code == 403
     assert owner_response.status_code == 200
-

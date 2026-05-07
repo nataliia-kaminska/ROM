@@ -91,6 +91,29 @@ def get_profile(
     return _to_read(profile)
 
 
+@router.put("/{profile_id}", response_model=ResearcherProfileRead)
+def update_profile(
+    profile_id: int,
+    payload: ResearcherProfileCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_optional_current_user),
+) -> ResearcherProfileRead:
+    profile = ensure_profile_access(db.get(ResearcherProfile, profile_id), current_user)
+    profile.full_name = payload.full_name
+    profile.email = payload.email
+    profile.career_stage = payload.career_stage
+    profile.country = payload.country
+    profile.disciplines = pack_list(payload.disciplines)
+    profile.keywords = pack_list(payload.keywords)
+    profile.preferred_countries = pack_list(payload.preferred_countries)
+    profile.orcid_id = payload.orcid_id
+    profile.google_scholar_url = str(payload.google_scholar_url) if payload.google_scholar_url else None
+    profile.linkedin_url = str(payload.linkedin_url) if payload.linkedin_url else None
+    db.commit()
+    db.refresh(profile)
+    return _to_read(profile)
+
+
 @router.put("/{profile_id}/details", response_model=ResearcherProfileDetailsRead)
 def upsert_profile_details(
     profile_id: int,

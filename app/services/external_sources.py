@@ -10,6 +10,7 @@ from app.schemas.opportunities import OpportunityCreate
 from app.integrations.source_connectors import get_source_connector
 from app.services.ingestion_audit import ensure_source, finish_batch, start_batch
 from app.services.opportunity_import import import_opportunities
+from app.services.opportunity_search import index_opportunity_for_search
 
 
 class ExternalSourceClient:
@@ -48,6 +49,7 @@ def import_external_source(payload: ExternalSourceImportRequest, db, client: Ext
         if payload.import_results:
             for opportunity in processed:
                 db.refresh(opportunity)
+                index_opportunity_for_search(opportunity)
         db.refresh(batch)
         return ExternalSourceImportResult(
             source=payload.source_name,

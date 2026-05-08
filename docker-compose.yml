@@ -10,6 +10,9 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://research:research@postgres:5432/research_matcher
       REDIS_URL: redis://redis:6379/0
+      WEBSOCKET_REDIS_ENABLED: "true"
+      ELASTICSEARCH_ENABLED: "true"
+      ELASTICSEARCH_URL: http://elasticsearch:9200
       AUTO_CREATE_TABLES: "false"
       APP_ENV: docker
     ports:
@@ -18,6 +21,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      elasticsearch:
         condition: service_healthy
 
   worker:
@@ -29,6 +34,9 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://research:research@postgres:5432/research_matcher
       REDIS_URL: redis://redis:6379/0
+      WEBSOCKET_REDIS_ENABLED: "true"
+      ELASTICSEARCH_ENABLED: "true"
+      ELASTICSEARCH_URL: http://elasticsearch:9200
       AUTO_CREATE_TABLES: "false"
       APP_ENV: docker
     depends_on:
@@ -37,6 +45,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      elasticsearch:
         condition: service_healthy
 
   scheduler:
@@ -48,6 +58,9 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://research:research@postgres:5432/research_matcher
       REDIS_URL: redis://redis:6379/0
+      WEBSOCKET_REDIS_ENABLED: "true"
+      ELASTICSEARCH_ENABLED: "true"
+      ELASTICSEARCH_URL: http://elasticsearch:9200
       AUTO_CREATE_TABLES: "false"
       APP_ENV: docker
     depends_on:
@@ -57,6 +70,19 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      VITE_API_BASE_URL: http://127.0.0.1:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_started
 
   postgres:
     image: pgvector/pgvector:pg16
@@ -84,5 +110,22 @@ services:
       timeout: 3s
       retries: 10
 
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
 volumes:
   postgres_data:
+  elasticsearch_data:

@@ -57,6 +57,44 @@ Ingestion uses strategy-style use cases:
 Adding a new source should require a new strategy/client/mapper, not changes to
 API routing or shared import logic.
 
+## Realtime Notifications
+
+The API exposes `GET /ws/notifications` as a WebSocket endpoint. Authenticated
+clients pass the same JWT token as a query parameter. The API keeps active
+connections in a lightweight connection manager.
+
+For single-process local development, notifications can be read through the
+regular REST endpoint. For production-style Docker deployments,
+`WEBSOCKET_REDIS_ENABLED=true` enables Redis pub/sub. Worker processes publish
+notification events to Redis, and the API process forwards them to connected
+WebSocket clients. This avoids coupling background workers directly to in-memory
+WebSocket state.
+
+## Full-Text Search
+
+Opportunity keyword search supports an Elasticsearch adapter. When
+`ELASTICSEARCH_ENABLED=true`, opportunity documents are indexed into the
+configured Elasticsearch index and keyword searches use `multi_match` queries
+over title, summary, eligibility, keywords, and disciplines. The query benefits
+from Elasticsearch relevance ranking and fuzzy matching. If Elasticsearch is
+disabled or unavailable, the system falls back to database search so local MVP
+flows remain reliable.
+
+## Containerized Runtime
+
+`docker-compose.yml` defines a full local production-like stack:
+
+- FastAPI API service;
+- RQ worker;
+- scheduler process;
+- React/Vite frontend;
+- PostgreSQL with pgvector;
+- Redis;
+- Elasticsearch.
+
+This makes the runtime reproducible and demonstrates deployment-oriented system
+design without requiring developers to install infrastructure services manually.
+
 ## Error Handling
 
 Application and domain layers raise `AppError` subclasses from

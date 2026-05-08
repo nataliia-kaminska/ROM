@@ -187,7 +187,7 @@ python -m alembic upgrade head
 
 Local note: if an older SQLite development database contains duplicate opportunity URLs from early testing, delete `research_matcher.db` before applying migrations locally.
 
-Docker development mode with PostgreSQL, pgvector, and Redis:
+Docker development mode with PostgreSQL, pgvector, Redis, Elasticsearch, the API, workers, scheduler, and frontend:
 
 ```powershell
 Copy-Item .env.example .env
@@ -197,13 +197,21 @@ docker compose up --build
 Open:
 
 - API: `http://127.0.0.1:8000`
+- Frontend: `http://127.0.0.1:3000`
 - PostgreSQL: `localhost:5432`
 - Redis: `localhost:6379`
+- Elasticsearch: `http://localhost:9200`
 
 Docker Compose also starts:
 
 - `worker`: RQ worker for ingestion and reminder jobs;
-- `scheduler`: lightweight scheduler that periodically queues source sync and reminder scan jobs.
+- `scheduler`: lightweight scheduler that periodically queues source sync and reminder scan jobs;
+- `frontend`: React/Vite interface;
+- `elasticsearch`: full-text search engine for indexed opportunity documents.
+
+Realtime WebSocket notifications are exposed at `/ws/notifications`. In Docker mode, workers publish notification events through Redis pub/sub and the API forwards them to connected browser clients.
+
+When `ELASTICSEARCH_ENABLED=true`, keyword opportunity search uses Elasticsearch `multi_match` queries over title, summary, eligibility, keywords, and disciplines. If Elasticsearch is disabled or unavailable, the backend falls back to the database search path.
 
 Run a local worker against your local `.env` Redis/PostgreSQL configuration:
 

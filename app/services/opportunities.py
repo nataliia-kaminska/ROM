@@ -7,6 +7,7 @@ from app.repositories import opportunities as opportunity_repository
 from app.schemas.opportunities import OpportunityBulkImportRequest, OpportunityCreate
 from app.services.ingestion_audit import ensure_source, finish_batch, start_batch
 from app.services.opportunity_import import build_opportunity, import_opportunities
+from app.services.opportunity_search import index_opportunity_for_search
 from app.services.results import BulkOpportunityImportResult
 
 
@@ -27,6 +28,7 @@ def create_opportunity(db: Session, payload: OpportunityCreate) -> Opportunity:
         db.rollback()
         raise DuplicateOpportunityError(str(payload.url)) from exc
     db.refresh(opportunity)
+    index_opportunity_for_search(opportunity)
     return opportunity
 
 
@@ -54,6 +56,7 @@ def bulk_import_opportunities(
     if not payload.dry_run:
         for opportunity in opportunities:
             db.refresh(opportunity)
+            index_opportunity_for_search(opportunity)
     db.refresh(batch)
     return BulkOpportunityImportResult(
         batch=batch,

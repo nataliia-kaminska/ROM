@@ -12,6 +12,7 @@ from app.schemas.opportunities import (
     OpportunityRead,
 )
 from app.services import opportunities as opportunity_service
+from app.services.opportunity_search import list_opportunities_with_search
 
 
 router = APIRouter(prefix="/opportunities", tags=["opportunities"])
@@ -38,7 +39,7 @@ def list_opportunities(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ) -> list[OpportunityRead]:
-    opportunities = opportunity_repository.list_opportunities(
+    opportunities = list_opportunities_with_search(
         db,
         source=source,
         opportunity_type=opportunity_type,

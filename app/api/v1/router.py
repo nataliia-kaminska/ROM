@@ -15,6 +15,7 @@ from app.api import (
     reminders,
     sources,
     statuses,
+    websockets,
 )
 
 
@@ -34,3 +35,4 @@ api_router.include_router(orcid.router)
 api_router.include_router(openalex.router)
 api_router.include_router(reminders.router)
 api_router.include_router(sources.router)
+api_router.include_router(websockets.router)

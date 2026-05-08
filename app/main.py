@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -7,6 +9,7 @@ from app.core.config import settings
 from app.core.logging import configure_logging
 from app.core.request_id import install_request_id_middleware
 from app.db.session import Base, engine
+from app.services.realtime_notifications import start_redis_notification_listener, stop_redis_notification_listener
 
 
 def create_app() -> FastAPI:
@@ -14,11 +17,20 @@ def create_app() -> FastAPI:
     if settings.auto_create_tables:
         Base.metadata.create_all(bind=engine)
 
+    @asynccontextmanager
+    async def lifespan(application: FastAPI):
+        start_redis_notification_listener(application)
+        try:
+            yield
+        finally:
+            stop_redis_notification_listener(application)
+
     application = FastAPI(
         title=f"{settings.app_name} API",
         version="0.1.0",
         description="MVP backend for personalized academic grants and exchange recommendations.",
         debug=settings.debug,
+        lifespan=lifespan,
     )
     application.add_middleware(
         CORSMiddleware,

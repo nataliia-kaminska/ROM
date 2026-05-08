@@ -5,6 +5,7 @@ from app.integrations.grants_gov.mapper import normalize_grants_gov_hit
 from app.modules.opportunities.mappers import to_opportunity_read
 from app.schemas.ingestion import GrantsGovIngestionResult
 from app.services.ingestion_audit import ensure_source, finish_batch, start_batch
+from app.services.opportunity_search import index_opportunity_for_search
 
 
 def ingest_grants_gov(
@@ -73,6 +74,7 @@ def _ingest_grants_gov_in_db(
             db.commit()
             for opportunity in imported:
                 db.refresh(opportunity)
+                index_opportunity_for_search(opportunity)
         else:
             imported = normalized
             finish_batch(db, batch, imported_count=0, updated_count=0, skipped_count=0)

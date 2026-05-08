@@ -1,5 +1,6 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { api } from "../api";
+import { API_BASE_URL } from "../api/client";
 import type { NotificationItem, NotificationPreference } from "../types";
 
 export function useNotifications({
@@ -19,6 +20,39 @@ export function useNotifications({
     high_match_alerts_enabled: true,
     min_alert_score: 80,
   });
+
+  useEffect(() => {
+    if (!token) return;
+    const websocket = new WebSocket(`${websocketBaseUrl()}/ws/notifications?token=${encodeURIComponent(token)}`);
+    websocket.onmessage = (event) => {
+      const incoming = JSON.parse(event.data) as Partial<NotificationItem>;
+      const notificationId = incoming.id;
+      if (!notificationId) return;
+      setNotifications((items) => [
+        {
+          id: notificationId,
+          notification_type: incoming.notification_type ?? "high_match_alert",
+          subject: incoming.subject ?? "New notification",
+          body: incoming.body ?? "",
+          status: incoming.status ?? "pending",
+          skip_reason: incoming.skip_reason ?? "",
+          recipient: incoming.recipient ?? "",
+          provider: incoming.provider ?? "",
+          provider_message_id: incoming.provider_message_id ?? "",
+          delivery_attempts: incoming.delivery_attempts ?? 0,
+          last_error: incoming.last_error ?? "",
+          created_at: incoming.created_at ?? new Date().toISOString(),
+          sent_at: incoming.sent_at ?? null,
+        },
+        ...items.filter((item) => item.id !== incoming.id),
+      ]);
+      setNotice("New notification received");
+    };
+    websocket.onerror = () => {
+      setError("Realtime notification connection failed");
+    };
+    return () => websocket.close();
+  }, [token, setError, setNotice]);
 
   async function loadNotifications() {
     if (!token) return;
@@ -75,4 +109,9 @@ export function useNotifications({
     markRead,
     unsubscribe,
   };
+}
+
+
+function websocketBaseUrl() {
+  return API_BASE_URL.replace(/^http/, "ws");
 }

@@ -7,6 +7,11 @@ class Settings(BaseSettings):
     debug: bool = False
     database_url: str = "sqlite:///./research_matcher.db"
     redis_url: str = "redis://localhost:6379/0"
+    websocket_redis_enabled: bool = False
+    websocket_notifications_channel: str = "notifications:realtime"
+    elasticsearch_enabled: bool = False
+    elasticsearch_url: str = "http://localhost:9200"
+    elasticsearch_opportunity_index: str = "research_opportunities"
     scheduler_tick_seconds: int = 60
     source_sync_interval_seconds: int = 21600
     source_sync_limit: int = 25

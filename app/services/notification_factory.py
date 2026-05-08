@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 
 from app.db.models import Notification, NotificationType, Opportunity, OpportunityReminder, ResearcherProfile, User
+from app.services.realtime_notifications import publish_notification_event
 
 
 def create_deadline_notification(
@@ -22,6 +23,7 @@ def create_deadline_notification(
     )
     db.add(notification)
     db.flush()
+    publish_notification_event(notification)
     return notification
 
 
@@ -43,4 +45,5 @@ def create_digest_notification(
     )
     db.add(notification)
     db.flush()
+    publish_notification_event(notification)
     return notification

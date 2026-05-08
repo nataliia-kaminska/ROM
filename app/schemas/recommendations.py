@@ -1,6 +1,6 @@
-from app.schemas.opportunities import OpportunityRead
+from pydantic import BaseModel, Field
 
-from pydantic import BaseModel
+from app.schemas.opportunities import OpportunityRead
 
 
 class RecommendationScoreBreakdown(BaseModel):
@@ -15,9 +15,9 @@ class RecommendationRead(BaseModel):
     opportunity: OpportunityRead
     match_score: int
     semantic_score: int = 0
-    score_breakdown: RecommendationScoreBreakdown = RecommendationScoreBreakdown()
+    score_breakdown: RecommendationScoreBreakdown = Field(default_factory=RecommendationScoreBreakdown)
     reasons: list[str]
     readiness_score: int = 0
-    gaps: list[str] = []
-    strengths: list[str] = []
+    gaps: list[str] = Field(default_factory=list)
+    strengths: list[str] = Field(default_factory=list)
     user_status: str | None = None

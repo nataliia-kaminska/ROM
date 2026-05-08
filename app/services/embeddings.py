@@ -6,6 +6,9 @@ from datetime import datetime
 from functools import lru_cache
 from typing import Protocol
 
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
 from app.core.config import settings
 from app.db.models import Opportunity, ResearcherProfile, ResearcherProfileDetails
 from app.services.serialization import unpack_list
@@ -178,6 +181,54 @@ def ensure_opportunity_embedding(opportunity: Opportunity) -> list[float]:
 
 def vector_literal(vector: list[float]) -> str:
     return "[" + ",".join(f"{value:.8f}" for value in vector) + "]"
+
+
+def refresh_opportunity_embeddings(db: Session) -> dict:
+    opportunities = db.query(Opportunity).all()
+    for opportunity in opportunities:
+        opportunity.opportunity_embedding = ""
+        vector = ensure_opportunity_embedding(opportunity)
+        if db.bind and db.bind.dialect.name == "postgresql":
+            db.execute(
+                text(
+                    "UPDATE opportunities "
+                    "SET opportunity_embedding_vector = CAST(:vector AS vector) "
+                    "WHERE id = :id"
+                ),
+                {"vector": vector_literal(vector), "id": opportunity.id},
+            )
+    db.commit()
+    return {"opportunity_count": len(opportunities)}
+
+
+def refresh_profile_embeddings(db: Session) -> dict:
+    details_records = db.query(ResearcherProfileDetails).all()
+    refreshed = 0
+    for details in details_records:
+        profile = db.get(ResearcherProfile, details.profile_id)
+        if profile is None:
+            continue
+        details.profile_embedding = ""
+        vector = ensure_profile_embedding(profile, details)
+        if db.bind and db.bind.dialect.name == "postgresql":
+            db.execute(
+                text(
+                    "UPDATE researcher_profile_details "
+                    "SET profile_embedding_vector = CAST(:vector AS vector) "
+                    "WHERE id = :id"
+                ),
+                {"vector": vector_literal(vector), "id": details.id},
+            )
+        refreshed += 1
+    db.commit()
+    return {"profile_count": refreshed}
+
+
+def refresh_all_embeddings(db: Session) -> dict:
+    return {
+        "profiles": refresh_profile_embeddings(db),
+        "opportunities": refresh_opportunity_embeddings(db),
+    }
 
 
 def _terms(text: str) -> list[str]:

@@ -1,0 +1,1 @@
+"""Opportunity catalog domain module."""

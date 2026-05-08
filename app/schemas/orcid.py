@@ -1,6 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from app.db.models import CareerStage
+from app.domain.enums import CareerStage
 from app.schemas.profiles import ResearcherProfileRead
 
 
@@ -8,8 +8,8 @@ class OrcidImportRequest(BaseModel):
     orcid_id: str
     career_stage: CareerStage = CareerStage.phd
     email: str | None = None
-    disciplines: list[str] = []
-    preferred_countries: list[str] = []
+    disciplines: list[str] = Field(default_factory=list)
+    preferred_countries: list[str] = Field(default_factory=list)
 
 
 class OrcidImportPreview(BaseModel):

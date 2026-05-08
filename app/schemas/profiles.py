@@ -1,6 +1,6 @@
-from pydantic import BaseModel, EmailStr, HttpUrl
+from pydantic import BaseModel, EmailStr, Field, HttpUrl
 
-from app.db.models import CareerStage
+from app.domain.enums import CareerStage
 
 
 class ResearcherProfileBase(BaseModel):
@@ -8,9 +8,9 @@ class ResearcherProfileBase(BaseModel):
     email: EmailStr | None = None
     career_stage: CareerStage
     country: str | None = None
-    disciplines: list[str] = []
-    keywords: list[str] = []
-    preferred_countries: list[str] = []
+    disciplines: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    preferred_countries: list[str] = Field(default_factory=list)
     orcid_id: str | None = None
     google_scholar_url: HttpUrl | None = None
     linkedin_url: HttpUrl | None = None

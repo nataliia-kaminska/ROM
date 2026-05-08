@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.db.models import NotificationStatus, NotificationType
+from app.domain.enums import NotificationStatus, NotificationType
 
 
 class NotificationPreferenceRead(BaseModel):

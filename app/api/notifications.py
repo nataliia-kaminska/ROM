@@ -2,10 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
-from app.db.models import Notification, NotificationStatus, ResearcherProfile, User
+from app.db.models import User
 from app.db.session import get_db
+from app.repositories import notifications as notification_repository
 from app.schemas.notifications import NotificationPreferenceRead, NotificationPreferenceUpdate, NotificationRead
-from app.services.notifications import get_or_create_preferences, mark_notification_read
+from app.services.notification_delivery import mark_notification_read
+from app.services.notification_preferences import get_or_create_preferences
 
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -19,13 +21,13 @@ def list_notifications(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[NotificationRead]:
-    profile_ids = [row[0] for row in db.query(ResearcherProfile.id).filter(ResearcherProfile.user_id == current_user.id).all()]
-    query = db.query(Notification).filter(
-        (Notification.user_id == current_user.id) | (Notification.profile_id.in_(profile_ids))
+    return notification_repository.list_notifications_for_user(
+        db,
+        current_user,
+        include_read=include_read,
+        limit=limit,
+        offset=offset,
     )
-    if not include_read:
-        query = query.filter(Notification.status != NotificationStatus.read)
-    return query.order_by(Notification.created_at.desc()).offset(offset).limit(limit).all()
 
 
 @router.put("/{notification_id}/read", response_model=NotificationRead)
@@ -34,8 +36,8 @@ def read_notification(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> NotificationRead:
-    notification = db.get(Notification, notification_id)
-    if notification is None or notification.user_id != current_user.id:
+    notification = notification_repository.get_user_notification(db, notification_id, current_user)
+    if notification is None:
         raise HTTPException(status_code=404, detail="Notification not found")
     mark_notification_read(notification)
     db.commit()

@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from app.core.security import decode_access_token
 from app.db.models import ResearcherProfile, User, UserRole
 from app.db.session import get_db
+from app.application.use_cases.ingestion import ExternalSourceIngestionUseCase, GrantsGovIngestionUseCase
+from app.application.use_cases.recommendations import ListRecommendationsUseCase
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -63,3 +65,14 @@ def ensure_profile_access(
         raise HTTPException(status_code=403, detail="Profile access denied")
     return profile
 
+
+def get_recommendation_use_case(db: Session = Depends(get_db)) -> ListRecommendationsUseCase:
+    return ListRecommendationsUseCase(db)
+
+
+def get_grants_gov_ingestion_use_case(db: Session = Depends(get_db)) -> GrantsGovIngestionUseCase:
+    return GrantsGovIngestionUseCase(db)
+
+
+def get_external_source_ingestion_use_case(db: Session = Depends(get_db)) -> ExternalSourceIngestionUseCase:
+    return ExternalSourceIngestionUseCase(db)

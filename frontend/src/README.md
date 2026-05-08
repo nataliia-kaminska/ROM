@@ -9,6 +9,8 @@ The frontend is organized by responsibility, not by accident of growth.
 - `types.ts`: DTOs shared by views and components.
 - `constants.ts`: domain constants, default form values, view identifiers, and route mapping.
 - `utils/`: pure formatting and normalization helpers.
+- `styles/`: split stylesheet layers for base rules, layout, forms, components, pages, and responsive behavior.
+- `styles.css`: stylesheet entrypoint that imports the split layers in order.
 - `components/ui.tsx`: reusable low-level UI primitives with no product workflow ownership.
 - `components/layout.tsx`: app shell and authentication layout.
 - `components/opportunities.tsx`: compatibility barrel for opportunity-specific reusable UI.
@@ -46,10 +48,12 @@ The frontend is organized by responsibility, not by accident of growth.
 - Admin imports, background jobs, queue inspection, and operations loading are isolated in `useAdminOps`.
 - `WorkspaceRoutes` now receives domain controllers rather than a flat prop tunnel.
 - Opportunity UI is split into card, drawer, scoring, and requirement modules.
+- Route/controller prop contracts are moved to `routes/types.ts`.
+- Global styling is split into focused files under `styles/`.
 
 ## Next Refactor Targets
 
 - Move controller/type definitions into feature folders as they grow.
-- Split `styles.css` into layout, form, component, and page styles.
-- Move route/controller prop types out of `WorkspaceRoutes.tsx`.
+- Move reusable form types out of route contracts as feature modules emerge.
+- Add a real router dependency if nested routes, route loaders, or URL params become important.
 - Add focused component tests after the view boundaries stabilize.

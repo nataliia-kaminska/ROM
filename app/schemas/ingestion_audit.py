@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.db.models import IngestionBatchStatus
+from app.domain.enums import IngestionBatchStatus
 
 
 class OpportunitySourceRead(BaseModel):
@@ -30,4 +30,3 @@ class IngestionBatchRead(BaseModel):
     finished_at: datetime | None
 
     model_config = {"from_attributes": True}
-

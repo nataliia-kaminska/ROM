@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
 
-from app.db.models import UserRole
+from app.domain.enums import UserRole
 
 
 class UserRegister(BaseModel):
@@ -28,4 +28,3 @@ class TokenRead(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserRead
-

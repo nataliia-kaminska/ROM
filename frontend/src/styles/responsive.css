@@ -1,0 +1,57 @@
+@media (max-width: 1050px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    height: auto;
+    position: static;
+  }
+
+  nav,
+  .filters,
+  .dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-grid > .span-2,
+  .next-action {
+    grid-column: 1 / -1;
+  }
+
+  .board {
+    grid-template-columns: repeat(3, minmax(190px, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .auth-shell,
+  .workspace,
+  .sidebar {
+    padding: 18px;
+  }
+
+  .grid-form,
+  .filters,
+  .dashboard-grid,
+  .table-row,
+  .completeness,
+  .score-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-grid > .span-2,
+  .next-action {
+    grid-column: auto;
+  }
+
+  .topbar,
+  .section-title {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .board {
+    grid-template-columns: 1fr;
+  }
+}

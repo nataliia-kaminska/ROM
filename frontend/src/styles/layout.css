@@ -1,0 +1,175 @@
+.auth-shell {
+  align-items: center;
+  background:
+    linear-gradient(rgba(244, 241, 234, 0.72), rgba(244, 241, 234, 0.86)),
+    url("https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=1800&q=80") center/cover;
+  display: flex;
+  min-height: 100vh;
+  padding: 32px;
+}
+
+.auth-panel {
+  background: rgba(255, 252, 245, 0.94);
+  border: 1px solid #ded6c4;
+  border-radius: 8px;
+  box-shadow: 0 24px 80px rgba(28, 37, 32, 0.16);
+  display: grid;
+  gap: 28px;
+  max-width: 560px;
+  padding: 36px;
+  width: 100%;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  background: #16362d;
+  color: #f7f4ec;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 24px;
+  position: sticky;
+  top: 0;
+}
+
+.brand {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.brand small {
+  color: #bfcfc8;
+  display: block;
+  font-size: 12px;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.mark {
+  align-items: center;
+  background: #d6f06f;
+  border-radius: 8px;
+  color: #16362d;
+  display: inline-flex;
+  font-weight: 800;
+  height: 44px;
+  justify-content: center;
+  width: 52px;
+}
+
+nav {
+  display: grid;
+  gap: 8px;
+}
+
+nav button,
+nav a,
+.ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: inherit;
+  display: block;
+  padding: 11px 12px;
+  text-align: left;
+  text-decoration: none;
+  text-transform: capitalize;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    transform 0.16s ease;
+}
+
+nav button:hover,
+nav button.active,
+nav a:hover,
+nav a.active,
+.ghost:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+nav button:active,
+nav a:active,
+.ghost:active,
+.primary:active,
+.secondary:active,
+.mini-card:active,
+.opportunity-card:active {
+  transform: translateY(1px);
+}
+
+.profile-switcher {
+  display: grid;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.profile-switcher span {
+  color: #bfcfc8;
+  font-size: 13px;
+}
+
+.account-summary {
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  color: #f7f4ec;
+  display: grid;
+  gap: 6px;
+  padding-top: 14px;
+}
+
+.sidebar-footer {
+  display: grid;
+  gap: 12px;
+  margin-top: auto;
+}
+
+.account-summary span,
+.account-summary small {
+  overflow-wrap: anywhere;
+}
+
+.account-summary small {
+  color: #bfcfc8;
+  text-transform: capitalize;
+}
+
+.workspace {
+  display: grid;
+  gap: 18px;
+  padding: 28px;
+}
+
+.topbar,
+.section-title {
+  align-items: center;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+}
+
+.topbar h1,
+.section-title h2 {
+  margin-bottom: 4px;
+}
+
+.panel {
+  background: #fffdf8;
+  border: 1px solid #ded6c4;
+  border-radius: 8px;
+  padding: 24px;
+}
+
+.separated {
+  border-top: 1px solid #e7dece;
+  margin-top: 24px;
+  padding-top: 24px;
+}

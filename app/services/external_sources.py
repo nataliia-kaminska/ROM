@@ -3,13 +3,13 @@ from typing import Any
 from xml.etree import ElementTree
 
 import httpx
-from app.api.opportunities import _to_preview
 from app.db.models import OpportunityType
+from app.modules.opportunities.mappers import to_opportunity_preview
 from app.schemas.ingestion import ExternalSourceImportRequest, ExternalSourceImportResult
 from app.schemas.opportunities import OpportunityCreate
+from app.integrations.source_connectors import get_source_connector
 from app.services.ingestion_audit import ensure_source, finish_batch, start_batch
 from app.services.opportunity_import import import_opportunities
-from app.services.source_connectors import get_source_connector
 
 
 class ExternalSourceClient:
@@ -55,7 +55,7 @@ def import_external_source(payload: ExternalSourceImportRequest, db, client: Ext
             imported_count=imported_count,
             updated_count=updated_count,
             skipped_count=skipped_count,
-            opportunities=[_to_preview(opportunity) for opportunity in processed],
+            opportunities=[to_opportunity_preview(opportunity) for opportunity in processed],
         )
     except Exception:
         finish_batch(db, batch, imported_count=0, updated_count=0, skipped_count=0, error_count=1)

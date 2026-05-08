@@ -1,20 +1,20 @@
 from datetime import date
 
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl
 
-from app.db.models import OpportunityType
+from app.domain.enums import OpportunityType
 
 
 class ExtractedRequirementRead(BaseModel):
-    career_stages: list[str] = []
-    countries: list[str] = []
+    career_stages: list[str] = Field(default_factory=list)
+    countries: list[str] = Field(default_factory=list)
     required_degree: str = ""
-    languages: list[str] = []
+    languages: list[str] = Field(default_factory=list)
     publication_expectation: str = ""
     mobility: str = ""
     citizenship: str = ""
     years_since_phd: int | None = None
-    snippets: list[str] = []
+    snippets: list[str] = Field(default_factory=list)
     confidence: int = 0
 
 
@@ -25,10 +25,10 @@ class OpportunityBase(BaseModel):
     url: HttpUrl
     summary: str = ""
     eligibility: str = ""
-    disciplines: list[str] = []
-    keywords: list[str] = []
-    countries: list[str] = []
-    career_stages: list[str] = []
+    disciplines: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    countries: list[str] = Field(default_factory=list)
+    career_stages: list[str] = Field(default_factory=list)
     deadline: date | None = None
 
 
@@ -52,7 +52,7 @@ class OpportunityPreview(OpportunityBase):
 class OpportunityBulkImportRequest(BaseModel):
     source: str
     dry_run: bool = False
-    opportunities: list[OpportunityCreate]
+    opportunities: list[OpportunityCreate] = Field(default_factory=list)
 
 
 class OpportunityBulkImportResult(BaseModel):

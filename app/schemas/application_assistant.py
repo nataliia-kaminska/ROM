@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ApplicationAssistantRequest(BaseModel):
@@ -15,8 +15,8 @@ class ApplicationAssistantRead(BaseModel):
     missing_profile_fields: list[str]
     eligibility_warnings: list[str]
     readiness_score: int = 0
-    gap_analysis: list[str] = []
-    strengths: list[str] = []
+    gap_analysis: list[str] = Field(default_factory=list)
+    strengths: list[str] = Field(default_factory=list)
     advisor_provider: str = "deterministic"
     advisor_memo: str = ""
     exported_notes: str

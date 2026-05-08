@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from app.db.models import ProfileOpportunityStatusValue
+from app.domain.enums import ProfileOpportunityStatusValue
 
 
 class ProfileOpportunityStatusCreate(BaseModel):
@@ -16,4 +16,3 @@ class ProfileOpportunityStatusRead(BaseModel):
     notes: str
 
     model_config = {"from_attributes": True}
-

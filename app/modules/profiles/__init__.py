@@ -1,0 +1,1 @@
+"""Researcher profile domain module."""

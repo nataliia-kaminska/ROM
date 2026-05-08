@@ -60,8 +60,19 @@ def complete_reminder(reminder: OpportunityReminder) -> OpportunityReminder:
     return reminder
 
 
+def list_due_reminders(db: Session, scan_date: date) -> list[OpportunityReminder]:
+    return (
+        db.query(OpportunityReminder)
+        .filter(
+            OpportunityReminder.status == ReminderStatus.pending,
+            OpportunityReminder.remind_on <= scan_date,
+        )
+        .order_by(OpportunityReminder.remind_on.asc())
+        .all()
+    )
+
+
 def _default_message(opportunity: Opportunity) -> str:
     if opportunity.deadline:
         return f"Deadline for {opportunity.title} is {opportunity.deadline.isoformat()}"
     return f"Review {opportunity.title}"
-

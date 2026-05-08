@@ -2,7 +2,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel
 
-from app.db.models import ReminderStatus
+from app.domain.enums import ReminderStatus
 
 
 class OpportunityReminderCreate(BaseModel):
@@ -21,4 +21,3 @@ class OpportunityReminderRead(BaseModel):
     completed_at: datetime | None = None
 
     model_config = {"from_attributes": True}
-

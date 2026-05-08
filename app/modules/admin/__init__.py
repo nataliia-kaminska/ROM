@@ -1,0 +1,1 @@
+"""Admin operations domain module."""

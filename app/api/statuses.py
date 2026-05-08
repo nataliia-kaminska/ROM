@@ -2,8 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import ensure_profile_access, get_optional_current_user
-from app.db.models import Opportunity, ProfileOpportunityStatus, ProfileOpportunityStatusValue, ResearcherProfile
+from app.db.models import ProfileOpportunityStatus, ProfileOpportunityStatusValue
 from app.db.session import get_db
+from app.repositories import opportunities as opportunity_repository
+from app.repositories import profiles as profile_repository
+from app.repositories import workflow as workflow_repository
 from app.schemas.statuses import ProfileOpportunityStatusCreate, ProfileOpportunityStatusRead
 from app.services.reminders import ensure_deadline_reminder
 
@@ -23,19 +26,12 @@ def upsert_opportunity_status(
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_current_user),
 ) -> ProfileOpportunityStatusRead:
-    ensure_profile_access(db.get(ResearcherProfile, profile_id), current_user)
-    opportunity = db.get(Opportunity, opportunity_id)
+    ensure_profile_access(profile_repository.get_profile(db, profile_id), current_user)
+    opportunity = opportunity_repository.get_opportunity(db, opportunity_id)
     if opportunity is None:
         raise HTTPException(status_code=404, detail="Opportunity not found")
 
-    existing = (
-        db.query(ProfileOpportunityStatus)
-        .filter(
-            ProfileOpportunityStatus.profile_id == profile_id,
-            ProfileOpportunityStatus.opportunity_id == opportunity_id,
-        )
-        .first()
-    )
+    existing = workflow_repository.get_profile_opportunity_status(db, profile_id, opportunity_id)
     if existing:
         existing.status = payload.status
         existing.notes = payload.notes
@@ -67,10 +63,5 @@ def list_opportunity_statuses(
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_current_user),
 ) -> list[ProfileOpportunityStatusRead]:
-    ensure_profile_access(db.get(ResearcherProfile, profile_id), current_user)
-    return (
-        db.query(ProfileOpportunityStatus)
-        .filter(ProfileOpportunityStatus.profile_id == profile_id)
-        .order_by(ProfileOpportunityStatus.updated_at.desc())
-        .all()
-    )
+    ensure_profile_access(profile_repository.get_profile(db, profile_id), current_user)
+    return workflow_repository.list_profile_statuses_recent(db, profile_id)

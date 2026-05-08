@@ -1,11 +1,11 @@
-from datetime import date
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import ensure_profile_access, get_optional_current_user
-from app.db.models import Opportunity, OpportunityReminder, ReminderStatus, ResearcherProfile
 from app.db.session import get_db
+from app.repositories import opportunities as opportunity_repository
+from app.repositories import profiles as profile_repository
+from app.repositories import workflow as workflow_repository
 from app.schemas.reminders import OpportunityReminderCreate, OpportunityReminderRead
 from app.services.reminders import complete_reminder, create_reminder
 
@@ -20,8 +20,8 @@ def create_profile_reminder(
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_current_user),
 ) -> OpportunityReminderRead:
-    ensure_profile_access(db.get(ResearcherProfile, profile_id), current_user)
-    opportunity = db.get(Opportunity, payload.opportunity_id)
+    ensure_profile_access(profile_repository.get_profile(db, profile_id), current_user)
+    opportunity = opportunity_repository.get_opportunity(db, payload.opportunity_id)
     if opportunity is None:
         raise HTTPException(status_code=404, detail="Opportunity not found")
 
@@ -45,15 +45,13 @@ def list_profile_reminders(
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_current_user),
 ) -> list[OpportunityReminderRead]:
-    ensure_profile_access(db.get(ResearcherProfile, profile_id), current_user)
-
-    query = db.query(OpportunityReminder).filter(OpportunityReminder.profile_id == profile_id)
-    if due_only:
-        query = query.filter(OpportunityReminder.remind_on <= date.today())
-    if not include_completed:
-        query = query.filter(OpportunityReminder.status == ReminderStatus.pending)
-
-    return query.order_by(OpportunityReminder.remind_on.asc()).all()
+    ensure_profile_access(profile_repository.get_profile(db, profile_id), current_user)
+    return workflow_repository.list_profile_reminders(
+        db,
+        profile_id=profile_id,
+        include_completed=include_completed,
+        due_only=due_only,
+    )
 
 
 @router.put("/{reminder_id}/complete", response_model=OpportunityReminderRead)
@@ -63,15 +61,8 @@ def complete_profile_reminder(
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_current_user),
 ) -> OpportunityReminderRead:
-    ensure_profile_access(db.get(ResearcherProfile, profile_id), current_user)
-    reminder = (
-        db.query(OpportunityReminder)
-        .filter(
-            OpportunityReminder.profile_id == profile_id,
-            OpportunityReminder.id == reminder_id,
-        )
-        .first()
-    )
+    ensure_profile_access(profile_repository.get_profile(db, profile_id), current_user)
+    reminder = workflow_repository.get_profile_reminder(db, profile_id, reminder_id)
     if reminder is None:
         raise HTTPException(status_code=404, detail="Reminder not found")
 

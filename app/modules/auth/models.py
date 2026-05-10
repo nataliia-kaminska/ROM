@@ -17,4 +17,7 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(200), default="")
     role: Mapped[UserRole] = mapped_column(SqlEnum(UserRole), default=UserRole.researcher, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    email_verification_token_hash: Mapped[str] = mapped_column(String(128), default="")
+    email_verification_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

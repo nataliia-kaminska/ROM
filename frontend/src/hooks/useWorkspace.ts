@@ -4,6 +4,8 @@ import { defaultFilters, reminderStatuses, type DetailTab } from "../constants";
 import type { Opportunity, OpportunityStatus, Profile, Recommendation, Reminder, StatusRecord } from "../types";
 import { label } from "../utils/format";
 
+const PAGE_SIZE = 20;
+
 export function useWorkspace({
   token,
   activeProfile,
@@ -19,6 +21,8 @@ export function useWorkspace({
   const [filters, setFilters] = useState(defaultFilters);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [matchesPage, setMatchesPage] = useState(1);
+  const [matchesHasNextPage, setMatchesHasNextPage] = useState(false);
   const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>("overview");
   const [statuses, setStatuses] = useState<StatusRecord[]>([]);
@@ -29,10 +33,12 @@ export function useWorkspace({
     [statuses],
   );
 
-  async function refreshWorkspace(profile = activeProfile, nextFilters = filters) {
+  async function refreshWorkspace(profile = activeProfile, nextFilters = filters, page = matchesPage) {
     setError("");
     setWorkspaceLoading(true);
     try {
+      const limit = PAGE_SIZE + 1;
+      const offset = (page - 1) * PAGE_SIZE;
       const opportunityQuery = {
         keyword: nextFilters.keyword,
         opportunity_type: nextFilters.opportunity_type,
@@ -40,26 +46,39 @@ export function useWorkspace({
         career_stage: nextFilters.career_stage,
         source: nextFilters.source,
         active_only: nextFilters.active_only,
-        limit: 100,
+        limit,
+        offset,
       };
       const catalogPromise = api.opportunities(opportunityQuery);
       if (token && profile) {
-        const [nextRecommendations, nextStatuses, nextReminders, nextOpportunities] = await Promise.all([
-          api.recommendations(token, profile.id, {
+        const recommendationPromise = api
+          .recommendations(token, profile.id, {
             min_score: nextFilters.min_score,
             include_ignored: nextFilters.include_ignored,
-          }),
+            limit,
+            offset,
+          })
+          .catch((recommendationError) => {
+            setError(`Personalized matching is temporarily unavailable. Showing catalog results instead. ${(recommendationError as Error).message}`);
+            return [] as Recommendation[];
+          });
+        const [nextRecommendations, nextStatuses, nextReminders, nextOpportunities] = await Promise.all([
+          recommendationPromise,
           api.statuses(token, profile.id),
           api.reminders(token, profile.id, true),
           catalogPromise,
         ]);
-        setRecommendations(nextRecommendations);
+        setRecommendations(nextRecommendations.slice(0, PAGE_SIZE));
         setStatuses(nextStatuses);
         setReminders(nextReminders);
-        setOpportunities(nextOpportunities);
+        setOpportunities(nextOpportunities.slice(0, PAGE_SIZE));
+        setMatchesHasNextPage((nextRecommendations.length > 0 ? nextRecommendations : nextOpportunities).length > PAGE_SIZE);
       } else {
-        setOpportunities(await catalogPromise);
+        const nextOpportunities = await catalogPromise;
+        setOpportunities(nextOpportunities.slice(0, PAGE_SIZE));
+        setMatchesHasNextPage(nextOpportunities.length > PAGE_SIZE);
       }
+      setMatchesPage(page);
     } catch (workspaceError) {
       setError((workspaceError as Error).message);
     } finally {
@@ -69,7 +88,16 @@ export function useWorkspace({
 
   function resetFilters() {
     setFilters(defaultFilters);
-    void refreshWorkspace(activeProfile, defaultFilters);
+    void refreshWorkspace(activeProfile, defaultFilters, 1);
+  }
+
+  function applyFilters() {
+    void refreshWorkspace(activeProfile, filters, 1);
+  }
+
+  function goToMatchesPage(page: number) {
+    if (page < 1 || workspaceLoading) return;
+    void refreshWorkspace(activeProfile, filters, page);
   }
 
   function clearWorkspace() {
@@ -77,6 +105,8 @@ export function useWorkspace({
     setStatuses([]);
     setReminders([]);
     setSelectedOpportunity(null);
+    setMatchesPage(1);
+    setMatchesHasNextPage(false);
   }
 
   async function updateStatus(opportunityId: number, status: OpportunityStatus) {
@@ -141,6 +171,8 @@ export function useWorkspace({
     recommendations,
     opportunities,
     selectedOpportunity,
+    matchesPage,
+    matchesHasNextPage,
     detailTab,
     statuses,
     reminders,
@@ -153,6 +185,8 @@ export function useWorkspace({
     setReminderForm,
     refreshWorkspace,
     resetFilters,
+    applyFilters,
+    goToMatchesPage,
     clearWorkspace,
     updateStatus,
     createReminder,

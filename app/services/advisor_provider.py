@@ -20,6 +20,7 @@ class AdvisorFacts:
     gaps: list[str]
     warnings: list[str]
     missing_fields: list[str]
+    retrieved_context: list[str]
     checklist: list[str]
     motivation_outline: list[str]
     fit_statement: str
@@ -74,6 +75,7 @@ def deterministic_advisor_memo(facts: AdvisorFacts) -> str:
     top_strengths = facts.strengths[:3] or ["No strong fit signals are confirmed yet."]
     top_gaps = facts.gaps[:3] or ["No major gaps are flagged by the deterministic analysis."]
     warnings = facts.warnings[:3] or ["No eligibility warnings are currently flagged."]
+    evidence = facts.retrieved_context[:4] or ["No retrieved evidence snippets were available."]
     next_steps = facts.checklist[:4]
     return "\n".join(
         [
@@ -87,6 +89,9 @@ def deterministic_advisor_memo(facts: AdvisorFacts) -> str:
             "",
             "Eligibility cautions:",
             *[f"- {item}" for item in warnings],
+            "",
+            "Retrieved evidence used:",
+            *[f"- {item}" for item in evidence],
             "",
             "Recommended next actions:",
             *[f"- {item}" for item in next_steps],
@@ -109,6 +114,7 @@ def _chat_completion(base_url: str, api_key: str, model: str, facts: AdvisorFact
                         "content": (
                             "You are an academic application advisor. Use only the provided JSON facts. "
                             "Do not invent eligibility requirements, deadlines, publications, countries, or scores. "
+                            "Ground your advice in retrieved_context snippets when possible. "
                             "Write concise, practical advice with clear next actions."
                         ),
                     },
@@ -116,7 +122,7 @@ def _chat_completion(base_url: str, api_key: str, model: str, facts: AdvisorFact
                         "role": "user",
                         "content": (
                             "Create an advisor memo from these facts. Include: fit summary, risks, missing evidence, "
-                            "and next actions.\n\n"
+                            "next actions, and a short evidence-based note naming which snippets support the advice.\n\n"
                             f"{json.dumps(facts.__dict__, ensure_ascii=False)}"
                         ),
                     },

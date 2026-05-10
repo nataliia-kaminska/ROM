@@ -3,24 +3,28 @@ import type { ProfileDetailsPayload } from "../api";
 import { viewRoutes, type View } from "../constants";
 import type { Profile, User } from "../types";
 import { profileLabel, viewLabel } from "../utils/format";
-import { ActionButton, Field, ProfileCompleteness } from "./ui";
+import { ActionButton, Field, ProfileCompleteness, ToastStack } from "./ui";
 
 export function AuthScreen({
   authMode,
   authForm,
+  authNotice,
   error,
   loading,
   onSubmit,
   onAuthFormChange,
   onAuthModeChange,
+  onContinueAsGuest,
 }: {
   authMode: "login" | "register";
-  authForm: { email: string; password: string; full_name: string };
+  authForm: { email: string; password: string; confirm_password: string; full_name: string };
+  authNotice: string;
   error: string;
   loading: boolean;
   onSubmit: (event: FormEvent) => void;
-  onAuthFormChange: (form: { email: string; password: string; full_name: string }) => void;
+  onAuthFormChange: (form: { email: string; password: string; confirm_password: string; full_name: string }) => void;
   onAuthModeChange: (mode: "login" | "register") => void;
+  onContinueAsGuest: () => void;
 }) {
   return (
     <main className="auth-shell">
@@ -36,6 +40,10 @@ export function AuthScreen({
           )}
           <Field labelText="Email" type="email" value={authForm.email} onChange={(email) => onAuthFormChange({ ...authForm, email })} />
           <Field labelText="Password" type="password" value={authForm.password} onChange={(password) => onAuthFormChange({ ...authForm, password })} />
+          {authMode === "register" && (
+            <Field labelText="Confirm password" type="password" value={authForm.confirm_password} onChange={(confirm_password) => onAuthFormChange({ ...authForm, confirm_password })} />
+          )}
+          {authNotice && <div className="alert success span-2">{authNotice}</div>}
           {error && <div className="alert error span-2">{error}</div>}
           <ActionButton busy={loading} variant="primary" className="span-2">
             {authMode === "login" ? "Sign in" : "Sign up"}
@@ -44,40 +52,40 @@ export function AuthScreen({
         <button className="ghost" onClick={() => onAuthModeChange(authMode === "login" ? "register" : "login")}>
           {authMode === "login" ? "Need an account? Sign up" : "Already have an account? Sign in"}
         </button>
+        <button className="secondary span-2" type="button" onClick={onContinueAsGuest}>
+          Continue as guest
+        </button>
       </section>
     </main>
   );
 }
 
 export function AppShell({
-  apiBaseUrl,
   user,
+  isGuest,
   activeProfile,
   detailsForm,
   view,
   visibleViews,
-  workspaceLoading,
   notice,
   error,
   onViewChange,
-  onRefresh,
   onLogout,
   children,
 }: {
-  apiBaseUrl: string;
-  user: User;
+  user: User | null;
+  isGuest: boolean;
   activeProfile: Profile | null;
   detailsForm: ProfileDetailsPayload;
   view: View;
   visibleViews: readonly View[];
-  workspaceLoading: boolean;
   notice: string;
   error: string;
   onViewChange: (view: View) => void;
-  onRefresh: () => void;
   onLogout: () => void;
   children: ReactNode;
 }) {
+  const title = view === "about" ? "Research Opportunity Matcher" : activeProfile ? profileLabel(activeProfile, user?.email) : isGuest ? "Browse opportunities" : "Create your first profile";
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -85,7 +93,6 @@ export function AppShell({
           <span className="mark">ROM</span>
           <div>
             <strong>Research Matcher</strong>
-            <small>{apiBaseUrl}</small>
           </div>
         </div>
         <nav>
@@ -102,21 +109,15 @@ export function AppShell({
               {viewLabel(item)}
             </a>
           ))}
-          {user.role !== "admin" && (
-            <button disabled title="Admin tools are available only to users with the admin role. Current roles are researcher and admin.">
-              Admin
-            </button>
-          )}
         </nav>
         <div className="sidebar-footer">
           <div className="account-summary">
-            <small>Signed in</small>
-            <span>{user.email}</span>
-            <small>Role: {user.role}</small>
-            {activeProfile && <small>Profile: {profileLabel(activeProfile, user.email)}</small>}
+            <small>{isGuest ? "Guest access" : "Signed in"}</small>
+            <span>{isGuest ? "Browsing public catalog" : user?.email}</span>
+            {activeProfile && <small>Profile: {profileLabel(activeProfile, user?.email)}</small>}
           </div>
           <button className="ghost" onClick={onLogout}>
-            Sign out
+            {isGuest ? "Back to sign in" : "Sign out"}
           </button>
         </div>
       </aside>
@@ -125,19 +126,19 @@ export function AppShell({
         <header className="topbar">
           <div>
             <p className="eyebrow">{viewLabel(view)}</p>
-            <h1>{activeProfile ? profileLabel(activeProfile, user.email) : "Create your first profile"}</h1>
+            <h1>{title}</h1>
           </div>
-          <ActionButton busy={workspaceLoading} variant="secondary" type="button" onClick={onRefresh}>
-            Refresh
-          </ActionButton>
         </header>
-        <ProfileCompleteness profile={activeProfile} details={detailsForm} />
-
-        {notice && <div className="alert success">{notice}</div>}
-        {error && <div className="alert error">{error}</div>}
+        {!isGuest && <ProfileCompleteness profile={activeProfile} details={detailsForm} />}
+        {isGuest && (
+          <div className="alert guest-callout">
+            Create an account to get personalized recommendations, save opportunities, plan applications, and receive reminders.
+          </div>
+        )}
 
         {children}
       </section>
+      <ToastStack notice={notice} error={error} />
     </main>
   );
 }

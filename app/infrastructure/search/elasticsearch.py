@@ -44,6 +44,7 @@ class ElasticsearchOpportunitySearch:
             if value:
                 filter_clauses.append({"term": {field: value}})
 
+        logger.debug("elasticsearch search index=%s keyword=%s filters=%s", self.index_name, keyword, filters)
         response = self.client.post(
             f"{self.base_url}/{self.index_name}/_search",
             json={
@@ -55,9 +56,12 @@ class ElasticsearchOpportunitySearch:
         )
         response.raise_for_status()
         hits = response.json().get("hits", {}).get("hits", [])
-        return [int(hit["_source"]["id"]) for hit in hits if hit.get("_source", {}).get("id") is not None]
+        ids = [int(hit["_source"]["id"]) for hit in hits if hit.get("_source", {}).get("id") is not None]
+        logger.debug("elasticsearch search complete index=%s hits=%s", self.index_name, len(ids))
+        return ids
 
     def index_opportunity(self, opportunity: Opportunity) -> None:
+        logger.debug("elasticsearch index opportunity index=%s opportunity_id=%s", self.index_name, opportunity.id)
         response = self.client.put(
             f"{self.base_url}/{self.index_name}/_doc/{opportunity.id}",
             json=_opportunity_document(opportunity),

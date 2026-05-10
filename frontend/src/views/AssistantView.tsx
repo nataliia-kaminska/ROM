@@ -53,6 +53,10 @@ export function AssistantView({
             <p>{assistantResult.advisor_memo}</p>
           </section>
           <section className="span-2">
+            <h3>Retrieved Context</h3>
+            <ul className="reasons">{assistantResult.retrieved_context.map((item) => <li key={item}>{item}</li>)}</ul>
+          </section>
+          <section className="span-2">
             <h3>Readiness</h3>
             <div className="completeness">
               <div>

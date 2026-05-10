@@ -33,16 +33,28 @@ class NotificationConnectionManager:
     async def connect(self, websocket: WebSocket, user_id: int | None = None) -> None:
         await websocket.accept()
         self._connections.setdefault(user_id, set()).add(websocket)
+        logger.info("websocket connected user_id=%s active_connections=%s", user_id, self.connection_count())
 
     def disconnect(self, websocket: WebSocket) -> None:
+        removed = False
         for user_connections in self._connections.values():
+            if websocket in user_connections:
+                removed = True
             user_connections.discard(websocket)
+        if removed:
+            logger.info("websocket disconnected active_connections=%s", self.connection_count())
 
     async def broadcast(self, event: RealtimeNotificationEvent) -> None:
         payload = asdict(event)
         recipients = set(self._connections.get(None, set()))
         if event.user_id is not None:
             recipients.update(self._connections.get(event.user_id, set()))
+        logger.info(
+            "broadcast realtime notification notification_id=%s user_id=%s recipients=%s",
+            event.id,
+            event.user_id,
+            len(recipients),
+        )
         disconnected = []
         for websocket in recipients:
             try:
@@ -51,6 +63,9 @@ class NotificationConnectionManager:
                 disconnected.append(websocket)
         for websocket in disconnected:
             self.disconnect(websocket)
+
+    def connection_count(self) -> int:
+        return sum(len(items) for items in self._connections.values())
 
 
 notification_connection_manager = NotificationConnectionManager()
@@ -71,8 +86,15 @@ def event_from_notification(notification: Notification) -> RealtimeNotificationE
 
 def publish_notification_event(notification: Notification) -> None:
     if not settings.websocket_redis_enabled:
+        logger.debug("skip realtime publish notification_id=%s reason=redis_disabled", notification.id)
         return
     try:
+        logger.info(
+            "publish realtime notification notification_id=%s user_id=%s channel=%s",
+            notification.id,
+            notification.user_id,
+            settings.websocket_notifications_channel,
+        )
         get_redis_connection().publish(
             settings.websocket_notifications_channel,
             json.dumps(asdict(event_from_notification(notification))),
@@ -83,6 +105,7 @@ def publish_notification_event(notification: Notification) -> None:
 
 def start_redis_notification_listener(app) -> None:
     if not settings.websocket_redis_enabled:
+        logger.info("websocket redis listener disabled")
         return
 
     stop_event = threading.Event()
@@ -93,6 +116,7 @@ def start_redis_notification_listener(app) -> None:
         redis = get_redis_connection()
         pubsub = redis.pubsub(ignore_subscribe_messages=True)
         pubsub.subscribe(settings.websocket_notifications_channel)
+        logger.info("websocket redis listener started channel=%s", settings.websocket_notifications_channel)
         while not stop_event.is_set():
             message = pubsub.get_message(timeout=1.0)
             if not message:
@@ -113,3 +137,4 @@ def stop_redis_notification_listener(app) -> None:
     stop_event = getattr(app.state, "websocket_listener_stop", None)
     if stop_event is not None:
         stop_event.set()
+        logger.info("websocket redis listener stop requested")

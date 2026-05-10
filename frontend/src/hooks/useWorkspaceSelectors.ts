@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { ProfileDetailsPayload } from "../api";
 import { reminderStatuses, researcherViews, type View } from "../constants";
+import { curatedDisciplines, curatedKeywords, mergeSuggestions } from "../suggestions";
 import type { ApplicationAssistantResult, Opportunity, Profile, Recommendation, Reminder, StatusRecord, User } from "../types";
 
 export function useWorkspaceSelectors({
@@ -62,12 +63,19 @@ export function useWorkspaceSelectors({
     () => [...new Set([...opportunitiesById.values()].flatMap((opportunity) => opportunity.countries).filter(Boolean))].sort(),
     [opportunitiesById],
   );
+  const disciplineOptions = useMemo(
+    () => mergeSuggestions(curatedDisciplines, [...opportunitiesById.values()].flatMap((opportunity) => opportunity.disciplines)),
+    [opportunitiesById],
+  );
   const keywordOptions = useMemo(
-    () => [...new Set([...opportunitiesById.values()].flatMap((opportunity) => [...opportunity.keywords, ...opportunity.disciplines]).filter(Boolean))].sort(),
+    () => mergeSuggestions(curatedKeywords, [...opportunitiesById.values()].flatMap((opportunity) => opportunity.keywords)),
     [opportunitiesById],
   );
   const visibleViews = useMemo(
-    () => (user?.role === "admin" ? [...researcherViews, "admin" as const] : [...researcherViews]),
+    () => {
+      if (!user) return ["about" as const, "feed" as const];
+      return user.role === "admin" ? [...researcherViews, "admin" as const] : [...researcherViews];
+    },
     [user?.role],
   );
   const topMatches = useMemo(() => recommendations.slice(0, 3), [recommendations]);
@@ -80,12 +88,29 @@ export function useWorkspaceSelectors({
     [reminders],
   );
   const nextAction = useMemo(() => {
-    if (!activeProfile) return { title: "Create your research profile", detail: "Start with career stage, country, disciplines, and keywords.", target: "profile" as View };
+    if (!activeProfile) return { title: "Create your research profile", detail: "Start with career stage, country, disciplines, and keywords.", target: "profile" as View, focusFields: ["career_stage", "country", "disciplines", "keywords"] };
     if (!activeProfile.country || activeProfile.disciplines.length === 0 || activeProfile.keywords.length === 0) {
-      return { title: "Complete your profile basics", detail: "Country, disciplines, and keywords make the match explanations much better.", target: "profile" as View };
+      return {
+        title: "Complete your profile basics",
+        detail: "Country, disciplines, and keywords make the match explanations much better.",
+        target: "profile" as View,
+        focusFields: [
+          ...(!activeProfile.country ? ["country"] : []),
+          ...(activeProfile.disciplines.length === 0 ? ["disciplines"] : []),
+          ...(activeProfile.keywords.length === 0 ? ["keywords"] : []),
+        ],
+      };
     }
     if (!detailsForm.research_summary || detailsForm.publications.length === 0) {
-      return { title: "Add evidence for readiness scoring", detail: "Research summary and publications improve advisor gaps and fit statements.", target: "profile" as View };
+      return {
+        title: "Add evidence for readiness scoring",
+        detail: "Research summary and publications improve advisor gaps and fit statements.",
+        target: "profile" as View,
+        focusFields: [
+          ...(!detailsForm.research_summary ? ["research_summary"] : []),
+          ...(detailsForm.publications.length === 0 ? ["publications"] : []),
+        ],
+      };
     }
     if (topMatches.length > 0 && plannedStatuses.length === 0) {
       return { title: "Review your strongest matches", detail: `Start with ${topMatches[0].opportunity.title}. Save or plan anything worth applying to.`, target: "feed" as View };
@@ -109,6 +134,7 @@ export function useWorkspaceSelectors({
     reminderEligibleOpportunities,
     sourceOptions,
     countryOptions,
+    disciplineOptions,
     keywordOptions,
     visibleViews,
     topMatches,

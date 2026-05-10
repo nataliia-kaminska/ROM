@@ -171,6 +171,16 @@ Either install Make through Chocolatey, Scoop, Git Bash/MSYS2, or WSL, or use th
 That starts the backend on `127.0.0.1:8000`, the frontend on `127.0.0.1:3000`, plus worker and scheduler windows.
 Worker and scheduler require Redis on `127.0.0.1:6379`. The runner checks for Redis and tries `docker compose up -d redis` if Docker is available. If Redis is still unavailable, backend/frontend start and background processes are skipped with a warning.
 
+For a full local run from PowerShell with infrastructure exposed from Docker Compose, use the local full env:
+
+```powershell
+Copy-Item .env.full.local.example .env
+docker compose up -d postgres redis elasticsearch
+.\scripts\run-full-app.ps1
+```
+
+Use `.env.full.example` only when the API, worker, and scheduler also run inside Docker Compose. Docker service names like `redis`, `postgres`, and `elasticsearch` do not resolve from a local `.venv` process.
+
 Useful runner options:
 
 ```powershell
@@ -187,12 +197,21 @@ python -m alembic upgrade head
 
 Local note: if an older SQLite development database contains duplicate opportunity URLs from early testing, delete `research_matcher.db` before applying migrations locally.
 
-Docker development mode with PostgreSQL, pgvector, Redis, Elasticsearch, the API, workers, scheduler, and frontend:
+Docker development mode with PostgreSQL, pgvector, Redis, Elasticsearch, Groq/local-advisor settings, the API, workers, scheduler, and frontend:
 
 ```powershell
-Copy-Item .env.example .env
+Copy-Item .env.full.example .env
+# Then replace JWT_SECRET_KEY and GROQ_API_KEY before using AI advisor generation.
 docker compose up --build
 ```
+
+Full mode uses `OPPORTUNITY_EXTRACTION_PROVIDER=groq` to normalize imported opportunity metadata into database fields, and `EMBEDDING_PROVIDER=sentence_transformers` to store real semantic vectors in PostgreSQL/pgvector. For a local `.venv` run without Docker, install the embedding extra before enabling that provider:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[embeddings]"
+```
+
+Local full mode also supports `EMBEDDING_AUTO_INSTALL=true`. When `sentence-transformers` is requested but missing, the backend will try to install it with the current Python executable, then load `EMBEDDING_MODEL_NAME`. If install or model download fails, the app logs a warning and falls back to deterministic hash embeddings instead of failing the Matches page.
 
 Open:
 
@@ -322,6 +341,18 @@ POST /opportunities/bulk-import
 ```
 
 The importer deduplicates by URL, updates existing records, and supports `dry_run` previews.
+
+External source imports support source-specific normalization for `euraxess`, `daad`, `daad_ukraine`, `fulbright`, `fulbright_ukraine`, `msca`, `msca4ukraine`, `nrfu`, `nauka_gov_ua`, `house_of_europe`, and `science_for_ukraine`. The importer accepts `rss`, `json`, and lightweight `html` source kinds so Ukrainian opportunity pages without stable APIs can still be discovered and reviewed.
+
+Useful Ukrainian and Ukraine-focused source URLs to try from the admin external importer:
+
+- `nrfu`: `https://nrfu.org.ua/en/contests-posts-en/`
+- `nauka_gov_ua`: `https://nauka.gov.ua/`
+- `house_of_europe`: `https://houseofeurope.org.ua/en/opportunities`
+- `science_for_ukraine`: `https://scienceforukraine.eu/`
+- `msca4ukraine`: `https://sareurope.eu/msca4ukraine/`
+- `daad_ukraine`: `https://www.daad-ukraine.org/en/`
+- `fulbright_ukraine`: `https://fulbright.org.ua/en/`
 
 Researchers can track their workflow with:
 

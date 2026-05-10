@@ -1,3 +1,5 @@
+import logging
+
 from sqlalchemy.orm import Session
 
 from app.db.models import NotificationType, ResearcherProfile, User
@@ -6,6 +8,9 @@ from app.services.notification_delivery import mark_notification_delivery_attemp
 from app.services.notification_factory import create_digest_notification
 from app.services.notification_preferences import get_or_create_preferences, preferences_allow_high_match_email
 from app.services.notification_recommendations import top_recommendation_matches
+
+
+logger = logging.getLogger(__name__)
 
 
 def send_high_match_alerts(
@@ -18,10 +23,12 @@ def send_high_match_alerts(
     for user in [item for item in users if item is not None]:
         preferences = get_or_create_preferences(db, user)
         if not preferences_allow_high_match_email(preferences):
+            logger.info("high-match alert skipped user_id=%s reason=high_match_alerts_disabled", user.id)
             results.append({"user_id": user.id, "status": "skipped", "reason": "high_match_alerts_disabled"})
             continue
         profile = db.query(ResearcherProfile).filter(ResearcherProfile.user_id == user.id).first()
         if profile is None:
+            logger.info("high-match alert skipped user_id=%s reason=missing_profile", user.id)
             results.append({"user_id": user.id, "status": "skipped", "reason": "missing_profile"})
             continue
         matches = [
@@ -30,6 +37,7 @@ def send_high_match_alerts(
             if item["score"] >= preferences.min_alert_score
         ]
         if not matches:
+            logger.info("high-match alert skipped user_id=%s reason=no_high_matches threshold=%s", user.id, preferences.min_alert_score)
             results.append({"user_id": user.id, "status": "skipped", "reason": "no_high_matches"})
             continue
         body = "New high-match opportunities:\n\n" + "\n".join(
@@ -46,5 +54,6 @@ def send_high_match_alerts(
         result = (provider or get_email_provider()).send(user.email, notification.subject, notification.body)
         mark_notification_delivery_attempt(notification, result.provider, user.email, result.message_id, result.error)
         db.commit()
+        logger.info("high-match alert sent user_id=%s notification_id=%s matches=%s", user.id, notification.id, len(matches))
         results.append({"user_id": user.id, "status": notification.status.value, "notification_id": notification.id})
     return {"processed": len(results), "results": results}

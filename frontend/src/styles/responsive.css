@@ -10,8 +10,16 @@
 
   nav,
   .filters,
+  .about-grid,
+  .about-flow,
+  .admin-help-grid,
   .dashboard-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filter-field-wide,
+  .filter-actions {
+    grid-column: span 2;
   }
 
   .dashboard-grid > .span-2,
@@ -25,14 +33,24 @@
 }
 
 @media (max-width: 720px) {
+  :root {
+    --content-gap: var(--space-4);
+    --page-padding: var(--space-5);
+    --panel-padding: var(--space-5);
+    --section-gap: var(--space-4);
+  }
+
   .auth-shell,
   .workspace,
   .sidebar {
-    padding: 18px;
+    padding: var(--page-padding);
   }
 
   .grid-form,
   .filters,
+  .about-grid,
+  .about-flow,
+  .admin-help-grid,
   .dashboard-grid,
   .table-row,
   .completeness,
@@ -45,13 +63,28 @@
     grid-column: auto;
   }
 
+  .filter-field-wide,
+  .filter-actions {
+    grid-column: auto;
+  }
+
   .topbar,
-  .section-title {
+  .section-title,
+  .about-hero,
+  .focus-strip {
     align-items: stretch;
     flex-direction: column;
+    grid-template-columns: 1fr;
   }
 
   .board {
     grid-template-columns: 1fr;
+  }
+
+  .toast-stack {
+    bottom: var(--space-3);
+    left: var(--space-3);
+    right: var(--space-3);
+    width: auto;
   }
 }

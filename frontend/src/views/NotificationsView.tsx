@@ -7,7 +7,6 @@ export function NotificationsView({
   notifications,
   notificationPrefs,
   onPrefsChange,
-  onLoadNotifications,
   onSavePrefs,
   onUnsubscribe,
   onMarkRead,
@@ -15,7 +14,6 @@ export function NotificationsView({
   notifications: NotificationItem[];
   notificationPrefs: NotificationPreference;
   onPrefsChange: (prefs: NotificationPreference) => void;
-  onLoadNotifications: () => void;
   onSavePrefs: (event: FormEvent) => void;
   onUnsubscribe: () => void;
   onMarkRead: (notificationId: number) => void;
@@ -24,12 +22,9 @@ export function NotificationsView({
     <section className="panel">
       <div className="section-title">
         <div>
-          <h2>Notifications</h2>
-          <p>Review reminder history and tune proactive alerts.</p>
+          <h2>Notification Center</h2>
+          <p>Review delivery history and tune proactive alerts.</p>
         </div>
-        <button className="secondary" title="Fetch the latest notification history and saved alert preferences." onClick={onLoadNotifications}>
-          Refresh notifications
-        </button>
       </div>
       <form className="grid-form" onSubmit={onSavePrefs}>
         <label className="toggle">
@@ -80,7 +75,7 @@ export function NotificationsView({
             )}
           </div>
         ))}
-        {notifications.length === 0 && <EmptyState title="No notifications yet" detail="Deadline reminders, digests, and alerts will appear here once generated." />}
+        {notifications.length === 0 && <EmptyState title="No notification history yet" detail="Deadline reminders, digests, and alerts will appear here once generated." />}
       </div>
     </section>
   );

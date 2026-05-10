@@ -12,12 +12,13 @@ def build_application_assistant(
     opportunity: Opportunity,
     details: ResearcherProfileDetails | None,
 ) -> ApplicationAssistantRead:
+    retrieved_context = _retrieve_context(profile, opportunity, details)
     missing_fields = _missing_fields(profile, details)
     warnings = _eligibility_warnings(profile, opportunity, details)
     gaps = build_gap_analysis(profile, opportunity, details)
-    checklist = _checklist(opportunity, warnings)
+    checklist = _checklist(opportunity, warnings, retrieved_context)
     outline = _motivation_outline(profile, opportunity)
-    fit_statement = _fit_statement(profile, opportunity, details)
+    fit_statement = _fit_statement(profile, opportunity, details, retrieved_context)
     advisor_provider = get_advisor_provider()
     advisor_memo = advisor_provider.generate_memo(
         AdvisorFacts(
@@ -30,15 +31,17 @@ def build_application_assistant(
             gaps=gaps.gaps,
             warnings=warnings,
             missing_fields=missing_fields,
+            retrieved_context=retrieved_context,
             checklist=checklist,
             motivation_outline=outline,
             fit_statement=fit_statement,
         )
     )
-    notes = _export_notes(profile, opportunity, checklist, outline, fit_statement, missing_fields, warnings, gaps, advisor_memo)
+    notes = _export_notes(profile, opportunity, retrieved_context, checklist, outline, fit_statement, missing_fields, warnings, gaps, advisor_memo)
     return ApplicationAssistantRead(
         opportunity_id=opportunity.id,
         profile_id=profile.id,
+        retrieved_context=retrieved_context,
         application_checklist=checklist,
         motivation_letter_outline=outline,
         research_fit_statement=fit_statement,
@@ -53,7 +56,7 @@ def build_application_assistant(
     )
 
 
-def _checklist(opportunity: Opportunity, warnings: list[str]) -> list[str]:
+def _checklist(opportunity: Opportunity, warnings: list[str], retrieved_context: list[str]) -> list[str]:
     items = [
         "Confirm eligibility requirements against the official source.",
         "Prepare an updated academic CV.",
@@ -66,6 +69,9 @@ def _checklist(opportunity: Opportunity, warnings: list[str]) -> list[str]:
         items.insert(0, f"Submit before {opportunity.deadline.isoformat()}.")
     if opportunity.url:
         items.append(f"Open and verify application instructions: {opportunity.url}")
+    requirement_snippets = [snippet for snippet in retrieved_context if snippet.startswith("Opportunity eligibility") or snippet.startswith("Extracted requirement")]
+    if requirement_snippets:
+        items.insert(1, f"Use retrieved requirement evidence in the application plan: {requirement_snippets[0]}")
     if warnings:
         items.insert(0, "Resolve eligibility warnings before investing in the full application.")
     return items
@@ -87,6 +93,7 @@ def _fit_statement(
     profile: ResearcherProfile,
     opportunity: Opportunity,
     details: ResearcherProfileDetails | None,
+    retrieved_context: list[str],
 ) -> str:
     profile_topics = unpack_list(profile.keywords) or unpack_list(profile.disciplines)
     opportunity_topics = unpack_list(opportunity.keywords) or unpack_list(opportunity.disciplines)
@@ -95,12 +102,70 @@ def _fit_statement(
     if summary:
         return (
             f"{profile.full_name}'s work is a strong fit for {opportunity.title} because their profile centers on "
-            f"{topic_text}. Their research summary shows relevant direction: {summary[:260]}"
+            f"{topic_text}. Their research summary shows relevant direction: {summary[:260]} "
+            f"Retrieved evidence to cite: {_compact_snippet(retrieved_context[0]) if retrieved_context else 'add source-specific evidence before submission'}."
         )
     return (
         f"{profile.full_name}'s background in {topic_text} can be positioned as a fit for {opportunity.title}. "
         "A stronger statement should add concrete publications, methods, and expected outcomes."
     )
+
+
+def _retrieve_context(
+    profile: ResearcherProfile,
+    opportunity: Opportunity,
+    details: ResearcherProfileDetails | None,
+) -> list[str]:
+    query_terms = {
+        *[item.lower() for item in unpack_list(profile.disciplines)],
+        *[item.lower() for item in unpack_list(profile.keywords)],
+        *[item.lower() for item in unpack_list(opportunity.disciplines)],
+        *[item.lower() for item in unpack_list(opportunity.keywords)],
+        profile.career_stage.value.lower(),
+        (profile.country or "").lower(),
+    }
+    candidates = [
+        ("Opportunity summary", opportunity.summary),
+        ("Opportunity eligibility", opportunity.eligibility),
+        ("Opportunity disciplines", ", ".join(unpack_list(opportunity.disciplines))),
+        ("Opportunity keywords", ", ".join(unpack_list(opportunity.keywords))),
+        ("Opportunity countries", ", ".join(unpack_list(opportunity.countries))),
+        ("Opportunity career stages", ", ".join(unpack_list(opportunity.career_stages))),
+    ]
+    requirements = extract_opportunity_requirements(opportunity)
+    candidates.extend(
+        [
+            ("Extracted requirement countries", ", ".join(requirements.countries)),
+            ("Extracted requirement career stages", ", ".join(requirements.career_stages)),
+            ("Extracted requirement languages", ", ".join(requirements.languages)),
+            ("Extracted requirement snippets", " | ".join(requirements.snippets)),
+        ]
+    )
+    if details:
+        candidates.extend(
+            [
+                ("Profile research summary", details.research_summary),
+                ("Profile publications", ", ".join(unpack_list(details.publications))),
+                ("Profile degrees", ", ".join(unpack_list(details.degrees))),
+                ("Profile languages", ", ".join(unpack_list(details.languages))),
+                ("Profile funding interests", ", ".join(unpack_list(details.funding_interests))),
+            ]
+        )
+    scored = []
+    for label, text in candidates:
+        clean = " ".join((text or "").split())
+        if not clean:
+            continue
+        score = sum(1 for term in query_terms if term and term in clean.lower())
+        if label.startswith("Opportunity") or label.startswith("Extracted requirement"):
+            score += 1
+        scored.append((score, f"{label}: {_compact_snippet(clean)}"))
+    return [snippet for _, snippet in sorted(scored, key=lambda item: item[0], reverse=True)[:8]]
+
+
+def _compact_snippet(value: str, limit: int = 260) -> str:
+    text = " ".join(value.split())
+    return text if len(text) <= limit else f"{text[:limit].rstrip()}..."
 
 
 def _missing_fields(profile: ResearcherProfile, details: ResearcherProfileDetails | None) -> list[str]:
@@ -155,6 +220,7 @@ def _eligibility_warnings(
 def _export_notes(
     profile: ResearcherProfile,
     opportunity: Opportunity,
+    retrieved_context: list[str],
     checklist: list[str],
     outline: list[str],
     fit_statement: str,
@@ -166,6 +232,9 @@ def _export_notes(
     sections = [
         f"# Application Notes: {opportunity.title}",
         f"Profile: {profile.full_name}",
+        "",
+        "## Retrieved Context",
+        *[f"- {item}" for item in (retrieved_context or ["No retrieved snippets available"])],
         "",
         "## Checklist",
         *[f"- {item}" for item in checklist],

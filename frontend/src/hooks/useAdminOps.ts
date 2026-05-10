@@ -23,9 +23,9 @@ export function useAdminOps({
   const [importForm, setImportForm] = useState({ source: "curated", dry_run: true, payload: JSON.stringify([blankOpportunity], null, 2) });
   const [grantsForm, setGrantsForm] = useState({ keyword: "", limit: 10, import_results: true });
   const [externalForm, setExternalForm] = useState({
-    source_name: "euraxess",
+    source_name: "nrfu",
     source_url: "",
-    source_kind: "rss" as "rss" | "json",
+    source_kind: "html" as "rss" | "json" | "html",
     import_results: true,
     limit: 25,
     default_opportunity_type: "fellowship" as OpportunityType,
@@ -37,23 +37,29 @@ export function useAdminOps({
   const [jobForm, setJobForm] = useState({ job_id: "", queue_name: "" });
   const [queueStats, setQueueStats] = useState<{ name: string; queued_count: number; failed_count: number; started_count: number; finished_count: number; deferred_count: number }[]>([]);
   const [jobDetail, setJobDetail] = useState<Record<string, unknown> | null>(null);
+  const [adminBusy, setAdminBusy] = useState<string | null>(null);
 
   async function loadAdminOps() {
     if (!token) return;
     setError("");
+    setAdminBusy("operations");
     try {
       const [dashboard, audit, duplicates] = await Promise.all([api.adminDashboard(token), api.adminAuditLog(token), api.adminDuplicates(token)]);
       setAdminData(dashboard);
       setAuditLog(audit);
       setDuplicateGroups(duplicates);
+      setNotice("Operations data loaded");
     } catch (adminError) {
       setError((adminError as Error).message);
+    } finally {
+      setAdminBusy(null);
     }
   }
 
   async function runBulkImport(event: FormEvent) {
     event.preventDefault();
     setError("");
+    setAdminBusy("curated");
     try {
       const opportunities = JSON.parse(importForm.payload) as OpportunityPayload[];
       if (!Array.isArray(opportunities) || opportunities.length === 0) {
@@ -66,6 +72,8 @@ export function useAdminOps({
       await refreshWorkspace(activeProfile);
     } catch (importError) {
       setError((importError as Error).message);
+    } finally {
+      setAdminBusy(null);
     }
   }
 
@@ -76,6 +84,7 @@ export function useAdminOps({
       return;
     }
     setError("");
+    setAdminBusy("external");
     try {
       const result = await api.externalSourceImport({
         ...externalForm,
@@ -88,18 +97,23 @@ export function useAdminOps({
       await refreshWorkspace(activeProfile);
     } catch (importError) {
       setError((importError as Error).message);
+    } finally {
+      setAdminBusy(null);
     }
   }
 
   async function runGrantsGov(event: FormEvent) {
     event.preventDefault();
     setError("");
+    setAdminBusy("grants-now");
     try {
       const result = await api.grantsGov(grantsForm);
       setNotice(`${result.source}: ${result.imported_count} imported, ${result.skipped_count} skipped`);
       await refreshWorkspace(activeProfile);
     } catch (importError) {
       setError((importError as Error).message);
+    } finally {
+      setAdminBusy(null);
     }
   }
 
@@ -107,6 +121,7 @@ export function useAdminOps({
     event.preventDefault();
     if (!token) return;
     setError("");
+    setAdminBusy("grants-queue");
     try {
       const result = await api.enqueueGrantsGov(token, grantsForm);
       setJobForm({ job_id: result.job_id, queue_name: result.queue });
@@ -114,12 +129,15 @@ export function useAdminOps({
       await loadQueues();
     } catch (jobError) {
       setError((jobError as Error).message);
+    } finally {
+      setAdminBusy(null);
     }
   }
 
   async function enqueueReminderScan() {
     if (!token) return;
     setError("");
+    setAdminBusy("reminder-scan");
     try {
       const result = await api.enqueueReminderScan(token);
       setJobForm({ job_id: result.job_id, queue_name: result.queue });
@@ -127,12 +145,15 @@ export function useAdminOps({
       await loadQueues();
     } catch (jobError) {
       setError((jobError as Error).message);
+    } finally {
+      setAdminBusy(null);
     }
   }
 
   async function enqueueEmbeddingRefresh() {
     if (!token) return;
     setError("");
+    setAdminBusy("embeddings");
     try {
       const result = await api.enqueueEmbeddingRefresh(token);
       setJobForm({ job_id: result.job_id, queue_name: result.queue });
@@ -140,12 +161,15 @@ export function useAdminOps({
       await loadQueues();
     } catch (jobError) {
       setError((jobError as Error).message);
+    } finally {
+      setAdminBusy(null);
     }
   }
 
   async function enqueueWeeklyDigest() {
     if (!token) return;
     setError("");
+    setAdminBusy("digest");
     try {
       const job = await api.enqueueWeeklyDigest(token);
       setJobForm({ job_id: job.job_id, queue_name: job.queue });
@@ -153,12 +177,15 @@ export function useAdminOps({
       await loadQueues();
     } catch (jobError) {
       setError((jobError as Error).message);
+    } finally {
+      setAdminBusy(null);
     }
   }
 
   async function enqueueHighMatchAlerts() {
     if (!token) return;
     setError("");
+    setAdminBusy("alerts");
     try {
       const job = await api.enqueueHighMatchAlerts(token);
       setJobForm({ job_id: job.job_id, queue_name: job.queue });
@@ -166,16 +193,22 @@ export function useAdminOps({
       await loadQueues();
     } catch (jobError) {
       setError((jobError as Error).message);
+    } finally {
+      setAdminBusy(null);
     }
   }
 
   async function loadQueues() {
     if (!token) return;
     setError("");
+    setAdminBusy("queues");
     try {
       setQueueStats(await api.queues(token));
+      setNotice("Queue stats loaded");
     } catch (jobError) {
       setError((jobError as Error).message);
+    } finally {
+      setAdminBusy(null);
     }
   }
 
@@ -183,10 +216,14 @@ export function useAdminOps({
     event.preventDefault();
     if (!token) return;
     setError("");
+    setAdminBusy("job-detail");
     try {
       setJobDetail(await api.job(token, jobForm.job_id, jobForm.queue_name));
+      setNotice("Job detail loaded");
     } catch (jobError) {
       setError((jobError as Error).message);
+    } finally {
+      setAdminBusy(null);
     }
   }
 
@@ -200,6 +237,7 @@ export function useAdminOps({
     adminData,
     duplicateGroups,
     auditLog,
+    adminBusy,
     setImportForm,
     setGrantsForm,
     setExternalForm,

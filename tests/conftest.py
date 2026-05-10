@@ -6,10 +6,13 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.session import Base, get_db
 from app.main import app
+from app.core.config import settings
 
 
 @pytest.fixture
 def client() -> TestClient:
+    original_email_verification_required = settings.email_verification_required
+    settings.email_verification_required = False
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -30,6 +33,7 @@ def client() -> TestClient:
     try:
         yield TestClient(app)
     finally:
+        settings.email_verification_required = original_email_verification_required
         app.dependency_overrides.clear()
         if hasattr(app.state, "testing_session_factory"):
             delattr(app.state, "testing_session_factory")

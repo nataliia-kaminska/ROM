@@ -10,7 +10,7 @@ from app.modules.opportunities.mappers import to_opportunity_read
 from app.repositories import profiles as profile_repository
 from app.repositories import workflow as workflow_repository
 from app.schemas.recommendations import RecommendationRead
-from app.services.embeddings import ensure_profile_embedding, vector_literal
+from app.services.embeddings import persist_profile_embedding_vector, ensure_profile_embedding, vector_literal
 from app.services.recommendation_engine import build_history_signals, score_opportunity
 from app.services.requirements import build_gap_analysis
 
@@ -50,6 +50,8 @@ class PostgresVectorCandidateSelector:
         profile: ResearcherProfile,
         details: ResearcherProfileDetails | None,
     ) -> list[Opportunity]:
+        if details is not None:
+            persist_profile_embedding_vector(db, profile, details)
         profile_vector = ensure_profile_embedding(profile, details)
         candidate_rows = db.execute(
             text(
@@ -65,7 +67,7 @@ class PostgresVectorCandidateSelector:
         ).all()
         candidate_ids = [row[0] for row in candidate_rows]
         if not candidate_ids:
-            return []
+            return SqliteAllCandidateSelector().select(db, profile, details)
         return db.query(Opportunity).filter(Opportunity.id.in_(candidate_ids)).all()
 
 

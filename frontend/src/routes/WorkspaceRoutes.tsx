@@ -1,11 +1,13 @@
 import { AdminView } from "../views/AdminView";
+import { AboutView } from "../views/AboutView";
 import { AssistantView } from "../views/AssistantView";
 import { BoardView } from "../views/BoardView";
 import { DashboardView } from "../views/DashboardView";
 import { FeedView } from "../views/FeedView";
 import { NotificationsView } from "../views/NotificationsView";
-import { ProfileImportsView, ProfileView } from "../views/ProfileView";
+import { ProfileView } from "../views/ProfileView";
 import { RemindersView } from "../views/RemindersView";
+import { VerifyEmailView } from "../views/VerifyEmailView";
 import type { AdminController, AssistantController, NotificationsController, ProfileController, RouteController, WorkspaceController } from "./types";
 
 export function WorkspaceRoutes({
@@ -24,16 +26,22 @@ export function WorkspaceRoutes({
   admin: AdminController;
 }) {
   switch (route.view) {
+    case "verify_email":
+      return <VerifyEmailView onViewChange={route.onViewChange} />;
+    case "about":
+      return <AboutView isSignedIn={workspace.isSignedIn} onViewChange={route.onViewChange} />;
     case "dashboard":
       return (
         <DashboardView
           nextAction={workspace.nextAction}
           topMatches={workspace.topMatches}
           plannedStatuses={workspace.plannedStatuses}
+          statuses={workspace.statuses}
           nextReminder={workspace.nextReminder}
           opportunitiesById={workspace.opportunitiesById}
           canTrack={Boolean(workspace.activeProfile)}
           onViewChange={route.onViewChange}
+          onProfileFocus={workspace.onProfileFocus}
           onSelectOpportunity={workspace.onSelectOpportunity}
           onStatus={workspace.onStatus}
         />
@@ -46,42 +54,46 @@ export function WorkspaceRoutes({
           countryOptions={workspace.countryOptions}
           keywordOptions={workspace.keywordOptions}
           workspaceLoading={workspace.workspaceLoading}
+          isSignedIn={workspace.isSignedIn}
           activeProfile={Boolean(workspace.activeProfile)}
           recommendations={workspace.recommendations}
           opportunities={workspace.opportunities}
+          page={workspace.matchesPage}
+          hasNextPage={workspace.matchesHasNextPage}
           onFiltersChange={workspace.onFiltersChange}
           onApplyFilters={workspace.onApplyFilters}
           onResetFilters={workspace.onResetFilters}
+          onPageChange={workspace.onMatchesPageChange}
+          onViewChange={route.onViewChange}
           onSelectOpportunity={workspace.onSelectOpportunity}
           onStatus={workspace.onStatus}
         />
       );
     case "profile":
       return (
-        <>
-          <ProfileView
-            userEmail={profile.userEmail}
-            activeProfileExists={Boolean(workspace.activeProfile)}
-            loading={profile.loading}
-            profileForm={profile.profileForm}
-            detailsForm={profile.detailsForm}
-            keywordOptions={workspace.keywordOptions}
-            countryOptions={workspace.countryOptions}
-            onProfileChange={profile.onProfileChange}
-            onDetailsChange={profile.onDetailsChange}
-            onLoadDetails={profile.onLoadDetails}
-            onSaveProfile={profile.onSaveProfile}
-            onSaveDetails={profile.onSaveDetails}
-          />
-          <ProfileImportsView
-            orcidForm={profile.orcidForm}
-            openAlexForm={profile.openAlexForm}
-            onOrcidChange={profile.onOrcidChange}
-            onOpenAlexChange={profile.onOpenAlexChange}
-            onImportOrcid={profile.onImportOrcid}
-            onImportOpenAlex={profile.onImportOpenAlex}
-          />
-        </>
+        <ProfileView
+          userEmail={profile.userEmail}
+          userFullName={profile.userFullName}
+          activeProfileExists={Boolean(workspace.activeProfile)}
+          loading={profile.loading}
+          profileForm={profile.profileForm}
+          detailsForm={profile.detailsForm}
+          keywordOptions={workspace.keywordOptions}
+          disciplineOptions={workspace.disciplineOptions}
+          countryOptions={workspace.countryOptions}
+          orcidForm={profile.orcidForm}
+          openAlexForm={profile.openAlexForm}
+          highlightFields={profile.highlightFields}
+          onProfileChange={profile.onProfileChange}
+          onDetailsChange={profile.onDetailsChange}
+          onLoadDetails={profile.onLoadDetails}
+          onSaveProfile={profile.onSaveProfile}
+          onSaveDetails={profile.onSaveDetails}
+          onOrcidChange={profile.onOrcidChange}
+          onOpenAlexChange={profile.onOpenAlexChange}
+          onImportOrcid={profile.onImportOrcid}
+          onImportOpenAlex={profile.onImportOpenAlex}
+        />
       );
     case "board":
       return (
@@ -109,7 +121,6 @@ export function WorkspaceRoutes({
           notifications={notifications.notifications}
           notificationPrefs={notifications.notificationPrefs}
           onPrefsChange={notifications.onPrefsChange}
-          onLoadNotifications={notifications.onLoadNotifications}
           onSavePrefs={notifications.onSavePrefs}
           onUnsubscribe={notifications.onUnsubscribe}
           onMarkRead={notifications.onMarkRead}
@@ -137,6 +148,7 @@ export function WorkspaceRoutes({
           adminData={admin.adminData}
           duplicateGroups={admin.duplicateGroups}
           auditLog={admin.auditLog}
+          adminBusy={admin.adminBusy}
           onImportFormChange={admin.onImportFormChange}
           onGrantsFormChange={admin.onGrantsFormChange}
           onExternalFormChange={admin.onExternalFormChange}

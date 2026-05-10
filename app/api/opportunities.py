@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.db.models import OpportunityType
 from app.db.session import get_db
 from app.modules.opportunities.mappers import to_opportunity_preview, to_opportunity_read
 from app.repositories import opportunities as opportunity_repository
@@ -30,7 +29,7 @@ def create_opportunity(payload: OpportunityCreate, db: Session = Depends(get_db)
 @router.get("", response_model=list[OpportunityRead])
 def list_opportunities(
     source: str | None = None,
-    opportunity_type: OpportunityType | None = None,
+    opportunity_type: str | None = None,
     country: str | None = None,
     career_stage: str | None = None,
     keyword: str | None = None,

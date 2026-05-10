@@ -1,5 +1,8 @@
+import logging
 from datetime import date, datetime
+from html.parser import HTMLParser
 from typing import Any
+from urllib.parse import urljoin, urlparse
 from xml.etree import ElementTree
 
 import httpx
@@ -13,6 +16,9 @@ from app.services.opportunity_import import import_opportunities
 from app.services.opportunity_search import index_opportunity_for_search
 
 
+logger = logging.getLogger(__name__)
+
+
 class ExternalSourceClient:
     def __init__(self, http_client: httpx.Client | None = None) -> None:
         self.http_client = http_client or httpx.Client(timeout=20, follow_redirects=True)
@@ -24,6 +30,14 @@ class ExternalSourceClient:
 
 
 def import_external_source(payload: ExternalSourceImportRequest, db, client: ExternalSourceClient | None = None) -> ExternalSourceImportResult:
+    logger.info(
+        "external source import requested source=%s kind=%s url=%s import_results=%s limit=%s",
+        payload.source_name,
+        payload.source_kind,
+        payload.source_url,
+        payload.import_results,
+        payload.limit,
+    )
     source_client = client or ExternalSourceClient()
     connector = get_source_connector(payload.source_name)
     ensure_source(db, name=payload.source_name, display_name=connector.display_name, base_url=str(payload.source_url), source_type=payload.source_kind)
@@ -31,6 +45,7 @@ def import_external_source(payload: ExternalSourceImportRequest, db, client: Ext
     try:
         raw = source_client.fetch(str(payload.source_url))
         opportunities = normalize_external_source(raw, payload)
+        logger.info("external source normalized source=%s count=%s", payload.source_name, len(opportunities))
         processed, imported_count, updated_count, skipped_count = import_opportunities(
             db=db,
             payloads=opportunities,
@@ -60,6 +75,7 @@ def import_external_source(payload: ExternalSourceImportRequest, db, client: Ext
             opportunities=[to_opportunity_preview(opportunity) for opportunity in processed],
         )
     except Exception:
+        logger.exception("external source import failed source=%s batch_id=%s", payload.source_name, batch.id)
         finish_batch(db, batch, imported_count=0, updated_count=0, skipped_count=0, error_count=1)
         db.commit()
         raise
@@ -68,6 +84,8 @@ def import_external_source(payload: ExternalSourceImportRequest, db, client: Ext
 def normalize_external_source(raw: str, payload: ExternalSourceImportRequest) -> list[OpportunityCreate]:
     if payload.source_kind == "json":
         return [_payload_from_mapping(item, payload) for item in _json_items(raw)[: payload.limit]]
+    if payload.source_kind == "html":
+        return [_payload_from_mapping(item, payload) for item in _html_items(raw, str(payload.source_url))[: payload.limit]]
     return [_payload_from_mapping(item, payload) for item in _rss_items(raw)[: payload.limit]]
 
 
@@ -100,6 +118,167 @@ def _rss_items(raw: str) -> list[dict[str, Any]]:
             }
         )
     return normalized
+
+
+def _html_items(raw: str, source_url: str) -> list[dict[str, Any]]:
+    parser = _OpportunityLinkParser(source_url)
+    parser.feed(raw)
+    return parser.items()
+
+
+class _OpportunityLinkParser(HTMLParser):
+    opportunity_terms = (
+        "apply",
+        "award",
+        "call",
+        "competition",
+        "contest",
+        "fellowship",
+        "funding",
+        "grant",
+        "internship",
+        "mobility",
+        "opportunit",
+        "programme",
+        "program",
+        "research",
+        "scholarship",
+        "стипенд",
+        "грант",
+        "конкурс",
+        "можлив",
+        "програм",
+    )
+    generic_titles = {
+        "all opportunities",
+        "calls",
+        "competitions",
+        "contests",
+        "current calls",
+        "funding",
+        "funding opportunities",
+        "grants",
+        "open calls",
+        "opportunities",
+        "programmes",
+        "programs",
+        "scholarship database",
+        "scholarships",
+        "всі можливості",
+        "гранти",
+        "конкурси",
+        "можливості",
+        "програми",
+        "стипендії",
+    }
+    blocked_path_terms = (
+        "/about",
+        "/archive",
+        "/blog",
+        "/calendar",
+        "/category",
+        "/contact",
+        "/events",
+        "/faq",
+        "/login",
+        "/opportunities",
+        "/programs",
+        "/programmes",
+        "/search",
+        "/tag",
+    )
+    concrete_path_terms = (
+        "/call",
+        "/calls/",
+        "/competition",
+        "/contest",
+        "/grant",
+        "/grants/",
+        "/opportunity/",
+        "/post/",
+        "/posts/",
+        "/scholarship",
+        "/stipend",
+        "/vacancy",
+    )
+
+    def __init__(self, source_url: str) -> None:
+        super().__init__(convert_charrefs=True)
+        self.source_url = source_url
+        self._active_href: str | None = None
+        self._active_text: list[str] = []
+        self._links: list[dict[str, str]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() != "a":
+            return
+        attr_map = dict(attrs)
+        href = attr_map.get("href")
+        if href:
+            self._active_href = href
+            self._active_text = []
+
+    def handle_data(self, data: str) -> None:
+        if self._active_href:
+            self._active_text.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() != "a" or not self._active_href:
+            return
+        title = " ".join(" ".join(self._active_text).split())
+        href = self._active_href
+        self._active_href = None
+        self._active_text = []
+        if not self._looks_like_opportunity(title, href):
+            return
+        self._links.append(
+            {
+                "title": title,
+                "url": urljoin(self.source_url, href),
+                "summary": title,
+            }
+        )
+
+    def items(self) -> list[dict[str, str]]:
+        seen: set[str] = set()
+        items: list[dict[str, str]] = []
+        for link in self._links:
+            key = link["url"].casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            items.append(link)
+        return items
+
+    def _looks_like_opportunity(self, title: str, href: str) -> bool:
+        if len(title) < 8 or href.startswith(("#", "mailto:", "tel:", "javascript:")):
+            return False
+        absolute_url = urljoin(self.source_url, href)
+        if _same_page(self.source_url, absolute_url):
+            return False
+        title_normalized = " ".join(title.casefold().split()).strip(" .:-|")
+        if title_normalized in self.generic_titles:
+            return False
+        path = urlparse(absolute_url).path.casefold().rstrip("/")
+        if self._is_generic_listing_path(path):
+            return False
+        searchable = f"{title_normalized} {path}".casefold()
+        return any(term in searchable for term in self.opportunity_terms) and self._has_specificity(title_normalized, path)
+
+    def _is_generic_listing_path(self, path: str) -> bool:
+        if not path:
+            return True
+        return any(path == term.rstrip("/") or path.endswith(term.rstrip("/")) for term in self.blocked_path_terms) and not any(
+            term in path for term in self.concrete_path_terms
+        )
+
+    def _has_specificity(self, title: str, path: str) -> bool:
+        if any(char.isdigit() for char in f"{title} {path}"):
+            return True
+        if any(term in path for term in self.concrete_path_terms):
+            return True
+        words = [word for word in title.replace("/", " ").replace("-", " ").split() if len(word) > 2]
+        return len(words) >= 4
 
 
 def _payload_from_mapping(item: dict[str, Any], payload: ExternalSourceImportRequest) -> OpportunityCreate:
@@ -202,3 +381,11 @@ def _rss_link(item: ElementTree.Element) -> str:
         return text_link
     atom_link = item.find("{http://www.w3.org/2005/Atom}link")
     return atom_link.attrib.get("href", "") if atom_link is not None else ""
+
+
+def _same_page(left: str, right: str) -> bool:
+    left_parts = urlparse(left)
+    right_parts = urlparse(right)
+    left_path = left_parts.path.rstrip("/") or "/"
+    right_path = right_parts.path.rstrip("/") or "/"
+    return left_parts.netloc.casefold() == right_parts.netloc.casefold() and left_path.casefold() == right_path.casefold()

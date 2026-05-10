@@ -41,7 +41,7 @@ type OpenAlexForm = { openalex_author_id: string; orcid_id: string; max_works: n
 type ExternalForm = {
   source_name: string;
   source_url: string;
-  source_kind: "rss" | "json";
+  source_kind: "rss" | "json" | "html";
   import_results: boolean;
   limit: number;
   default_opportunity_type: OpportunityType;
@@ -58,14 +58,17 @@ export type RouteController = {
 
 export type WorkspaceController = {
   activeProfile: Profile | null;
+  isSignedIn: boolean;
   workspaceLoading: boolean;
   filters: Filters;
   recommendations: Recommendation[];
   opportunities: Opportunity[];
+  matchesPage: number;
+  matchesHasNextPage: boolean;
   statuses: StatusRecord[];
   reminders: Reminder[];
   reminderForm: { opportunity_id: string; remind_on: string; message: string };
-  nextAction: { title: string; detail: string; target: View };
+  nextAction: { title: string; detail: string; target: View; focusFields?: string[] };
   topMatches: Recommendation[];
   plannedStatuses: StatusRecord[];
   nextReminder: Reminder | null;
@@ -73,12 +76,15 @@ export type WorkspaceController = {
   reminderEligibleOpportunities: Opportunity[];
   sourceOptions: string[];
   countryOptions: string[];
+  disciplineOptions: string[];
   keywordOptions: string[];
+  onProfileFocus: (fields: string[]) => void;
   onSelectOpportunity: (opportunity: Opportunity) => void;
   onStatus: (opportunityId: number, status: OpportunityStatus) => void;
   onFiltersChange: (filters: Filters) => void;
   onApplyFilters: () => void;
   onResetFilters: () => void;
+  onMatchesPageChange: (page: number) => void;
   onReminderFormChange: (form: { opportunity_id: string; remind_on: string; message: string }) => void;
   onCreateReminder: (event: FormEvent) => void;
   onCompleteReminder: (reminderId: number) => void;
@@ -86,6 +92,7 @@ export type WorkspaceController = {
 
 export type ProfileController = {
   userEmail: string;
+  userFullName: string;
   loading: boolean;
   profileForm: ProfilePayload;
   detailsForm: ProfileDetailsPayload;
@@ -94,6 +101,7 @@ export type ProfileController = {
   onProfileChange: (profile: ProfilePayload) => void;
   onDetailsChange: (details: ProfileDetailsPayload) => void;
   onLoadDetails: () => void;
+  highlightFields: string[];
   onSaveProfile: (event: FormEvent) => void;
   onSaveDetails: (event: FormEvent) => void;
   onOrcidChange: (form: OrcidForm) => void;
@@ -106,7 +114,6 @@ export type NotificationsController = {
   notifications: NotificationItem[];
   notificationPrefs: NotificationPreference;
   onPrefsChange: (prefs: NotificationPreference) => void;
-  onLoadNotifications: () => void;
   onSavePrefs: (event: FormEvent) => void;
   onUnsubscribe: () => void;
   onMarkRead: (notificationId: number) => void;
@@ -129,6 +136,7 @@ export type AdminController = {
   adminData: Record<string, unknown> | null;
   duplicateGroups: Record<string, unknown>[];
   auditLog: Record<string, unknown>[];
+  adminBusy: string | null;
   onImportFormChange: (form: ImportForm) => void;
   onGrantsFormChange: (form: GrantsForm) => void;
   onExternalFormChange: (form: ExternalForm) => void;

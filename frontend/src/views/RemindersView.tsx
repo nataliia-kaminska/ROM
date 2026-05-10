@@ -23,7 +23,7 @@ export function RemindersView({
   return (
     <section className="panel">
       <div className="title-with-help">
-        <h2>Reminders</h2>
+        <h2>Application Reminders</h2>
         <HelpTip text="Create reminders only for opportunities you saved or planned, so the reminder list stays tied to real intent." />
       </div>
       <form className="grid-form" onSubmit={onCreateReminder}>
@@ -55,7 +55,7 @@ export function RemindersView({
             )}
           </div>
         ))}
-        {reminders.length === 0 && <EmptyState title="No reminders" detail="Saved, planned, and applied opportunities can generate deadline reminders automatically." />}
+        {reminders.length === 0 && <EmptyState title="No application reminders" detail="Saved, planned, and applied opportunities can generate deadline reminders automatically." />}
       </div>
     </section>
   );

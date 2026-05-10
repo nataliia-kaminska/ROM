@@ -1,59 +1,126 @@
-import type { FormEvent } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import type { ProfileDetailsPayload, ProfilePayload } from "../api";
 import type { CareerStage, OpportunityType } from "../types";
 import { careerStages, opportunityTypes } from "../constants";
 import { ActionButton, Field, HelpTip, MultiValueField, SelectField, TextArea } from "../components/ui";
 
+type ProfileSection = "basics" | "research" | "imports";
+
 export function ProfileView({
   userEmail,
+  userFullName,
   activeProfileExists,
   loading,
   profileForm,
   detailsForm,
+  disciplineOptions,
   keywordOptions,
   countryOptions,
+  orcidForm,
+  openAlexForm,
+  highlightFields,
   onProfileChange,
   onDetailsChange,
   onLoadDetails,
   onSaveProfile,
   onSaveDetails,
+  onOrcidChange,
+  onOpenAlexChange,
+  onImportOrcid,
+  onImportOpenAlex,
 }: {
   userEmail: string;
+  userFullName: string;
   activeProfileExists: boolean;
   loading: boolean;
   profileForm: ProfilePayload;
   detailsForm: ProfileDetailsPayload;
+  disciplineOptions: string[];
   keywordOptions: string[];
   countryOptions: string[];
+  orcidForm: { orcid_id: string; email: string; career_stage: CareerStage; disciplines: string; preferred_countries: string };
+  openAlexForm: { openalex_author_id: string; orcid_id: string; max_works: number };
+  highlightFields: string[];
   onProfileChange: (form: ProfilePayload) => void;
   onDetailsChange: (form: ProfileDetailsPayload) => void;
   onLoadDetails: () => void;
   onSaveProfile: (event: FormEvent) => void;
   onSaveDetails: (event: FormEvent) => void;
+  onOrcidChange: (form: { orcid_id: string; email: string; career_stage: CareerStage; disciplines: string; preferred_countries: string }) => void;
+  onOpenAlexChange: (form: { openalex_author_id: string; orcid_id: string; max_works: number }) => void;
+  onImportOrcid: (event: FormEvent) => void;
+  onImportOpenAlex: (event: FormEvent) => void;
 }) {
+  const [section, setSection] = useState<ProfileSection>("basics");
+  const accountName = userFullName || profileForm.full_name;
+  const highlights = new Set(highlightFields);
+
+  useEffect(() => {
+    if (highlightFields.some((field) => ["research_summary", "publications"].includes(field))) {
+      setSection("research");
+      return;
+    }
+    if (highlightFields.length > 0) {
+      setSection("basics");
+    }
+  }, [highlightFields.join("|")]);
+
   return (
-    <>
-      <section className="panel">
-        <div className="section-title">
-          <div>
-            <h2>Profile Wizard and Editor</h2>
-            <p>Create the profile used by recommendations, then enrich matching preferences.</p>
-          </div>
-          <button className="secondary" onClick={onLoadDetails}>
-            Load details
-          </button>
+    <section className="panel">
+      <div className="section-title">
+        <div>
+          <h2>Profile Wizard and Editor</h2>
+          <p>Complete the required identity fields first, then add research evidence or import public metadata.</p>
         </div>
+      </div>
+
+      <nav className="profile-subnav" aria-label="Profile sections">
+        <button type="button" className={section === "basics" ? "active" : ""} onClick={() => setSection("basics")}>
+          Wizard and Editor
+        </button>
+        <button type="button" className={section === "research" ? "active" : ""} onClick={() => setSection("research")}>
+          Research Evidence
+        </button>
+        <button type="button" className={section === "imports" ? "active" : ""} onClick={() => setSection("imports")}>
+          Imports
+        </button>
+      </nav>
+
+      {section === "basics" && (
         <form className="grid-form" onSubmit={onSaveProfile}>
-          <Field labelText="Full name" value={profileForm.full_name} onChange={(full_name) => onProfileChange({ ...profileForm, full_name })} />
+          <Field
+            labelText="Account name"
+            value={accountName}
+            disabled
+            onChange={() => undefined}
+            title="This comes from the name saved on your account during registration."
+          />
           <Field labelText="Account email" value={userEmail} disabled onChange={() => undefined} title="Profile email is linked to the signed-in account." />
-          <SelectField labelText="Career stage" value={profileForm.career_stage} options={careerStages} onChange={(career_stage) => onProfileChange({ ...profileForm, career_stage })} />
-          <Field labelText="Country" value={profileForm.country ?? ""} list="country-options" placeholder="Use countries visible in the feed" onChange={(country) => onProfileChange({ ...profileForm, country })} />
+          <SelectField
+            labelText="Career stage"
+            value={profileForm.career_stage}
+            options={careerStages}
+            required
+            className={fieldHighlight(highlights, "career_stage")}
+            onChange={(career_stage) => onProfileChange({ ...profileForm, career_stage })}
+          />
+          <Field
+            labelText="Home country"
+            value={profileForm.country ?? ""}
+            list="profile-country-options"
+            required
+            className={fieldHighlight(highlights, "country")}
+            placeholder="Where you are based or hold primary eligibility"
+            title="Used as your home country for eligibility checks, mobility warnings, and recommendation explanations."
+            onChange={(country) => onProfileChange({ ...profileForm, country })}
+          />
           <MultiValueField
             labelText="Disciplines"
             values={profileForm.disciplines}
             placeholder="Type a discipline, then Enter"
             help="Used for semantic matching, eligibility scoring, and match explanations."
-            suggestions={keywordOptions}
+            suggestions={disciplineOptions}
+            className={fieldHighlight(highlights, "disciplines")}
             onChange={(disciplines) => onProfileChange({ ...profileForm, disciplines })}
           />
           <MultiValueField
@@ -62,6 +129,7 @@ export function ProfileView({
             placeholder="Type a keyword, then Enter"
             help="Used to find topic overlap with opportunity summaries, keywords, and source metadata."
             suggestions={keywordOptions}
+            className={fieldHighlight(highlights, "keywords")}
             onChange={(keywords) => onProfileChange({ ...profileForm, keywords })}
           />
           <MultiValueField
@@ -77,9 +145,16 @@ export function ProfileView({
           <Field labelText="LinkedIn URL" value={profileForm.linkedin_url ?? ""} onChange={(linkedin_url) => onProfileChange({ ...profileForm, linkedin_url })} />
           <ActionButton busy={loading} className="span-2">{activeProfileExists ? "Update profile" : "Create profile"}</ActionButton>
         </form>
+      )}
+
+      {section === "research" && (
         <form className="grid-form separated" onSubmit={onSaveDetails}>
-          <TextArea labelText="Research summary" value={detailsForm.research_summary} onChange={(research_summary) => onDetailsChange({ ...detailsForm, research_summary })} />
-          <MultiValueField labelText="Publications" values={detailsForm.publications} placeholder="Paste a title or DOI, then Enter" help="Used by readiness scoring and the assistant to identify strengths and publication gaps." onChange={(publications) => onDetailsChange({ ...detailsForm, publications })} />
+          <div className="span-2 focus-strip">
+            <strong>Most important</strong>
+            <span>Research summary, publications, and funding interests have the biggest effect on match explanations and advisor notes.</span>
+          </div>
+          <TextArea labelText="Research summary" className={`span-2 ${fieldHighlight(highlights, "research_summary")}`} value={detailsForm.research_summary} onChange={(research_summary) => onDetailsChange({ ...detailsForm, research_summary })} />
+          <MultiValueField className={fieldHighlight(highlights, "publications")} labelText="Publications" values={detailsForm.publications} placeholder="Paste a title or DOI, then Enter" help="Used by readiness scoring and the assistant to identify strengths and publication gaps." onChange={(publications) => onDetailsChange({ ...detailsForm, publications })} />
           <MultiValueField labelText="Degrees" values={detailsForm.degrees} placeholder="Example: PhD Computer Science" help="Used for eligibility checks when opportunities require a degree level." suggestions={["Bachelor", "Master", "PhD", "MD", "MBA"]} onChange={(degrees) => onDetailsChange({ ...detailsForm, degrees })} />
           <MultiValueField labelText="Languages" values={detailsForm.languages} placeholder="Example: English" help="Used when requirements mention language ability." suggestions={["English", "German", "French", "Spanish", "Ukrainian"]} onChange={(languages) => onDetailsChange({ ...detailsForm, languages })} />
           <MultiValueField labelText="Funding interests" values={detailsForm.funding_interests} placeholder="Example: mobility funding" help="Used as extra topic preference for recommendations and advisor context." suggestions={keywordOptions} onChange={(funding_interests) => onDetailsChange({ ...detailsForm, funding_interests })} />
@@ -94,9 +169,26 @@ export function ProfileView({
           />
           <ActionButton busy={loading} className="span-2">Save details</ActionButton>
         </form>
-      </section>
-    </>
+      )}
+
+      {section === "imports" && (
+        <ProfileImportsView
+          orcidForm={orcidForm}
+          openAlexForm={openAlexForm}
+          onOrcidChange={onOrcidChange}
+          onOpenAlexChange={onOpenAlexChange}
+          onImportOrcid={onImportOrcid}
+          onImportOpenAlex={onImportOpenAlex}
+        />
+      )}
+
+      <datalist id="profile-country-options">{countryOptions.map((item) => <option value={item} key={item} />)}</datalist>
+    </section>
   );
+}
+
+function fieldHighlight(highlights: Set<string>, field: string): string {
+  return highlights.has(field) ? "field-highlight" : "";
 }
 
 export function ProfileImportsView({
@@ -115,7 +207,7 @@ export function ProfileImportsView({
   onImportOpenAlex: (event: FormEvent) => void;
 }) {
   return (
-    <section className="panel">
+    <div>
       <div className="section-title">
         <div className="title-with-help">
           <h2>Profile Imports</h2>
@@ -143,6 +235,6 @@ export function ProfileImportsView({
         <Field labelText="Max works" type="number" value={String(openAlexForm.max_works)} onChange={(max_works) => onOpenAlexChange({ ...openAlexForm, max_works: Number(max_works) })} />
         <button className="primary">Import OpenAlex</button>
       </form>
-    </section>
+    </div>
   );
 }

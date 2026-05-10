@@ -1,3 +1,5 @@
+import logging
+
 from app.db.models import Opportunity
 from app.db.session import SessionLocal
 from app.integrations.grants_gov.client import GrantsGovClient
@@ -8,6 +10,9 @@ from app.services.ingestion_audit import ensure_source, finish_batch, start_batc
 from app.services.opportunity_search import index_opportunity_for_search
 
 
+logger = logging.getLogger(__name__)
+
+
 def ingest_grants_gov(
     keyword: str,
     limit: int = 10,
@@ -15,6 +20,7 @@ def ingest_grants_gov(
     db=None,
     client: GrantsGovClient | None = None,
 ) -> GrantsGovIngestionResult:
+    logger.info("grants.gov ingestion requested keyword=%s limit=%s import_results=%s", keyword, limit, import_results)
     if db is not None:
         return _ingest_grants_gov_in_db(
             db,
@@ -54,6 +60,7 @@ def _ingest_grants_gov_in_db(
     batch = start_batch(db, source_name="grants.gov", query=keyword, dry_run=not import_results)
     try:
         hits = (client or GrantsGovClient()).search(keyword, limit)
+        logger.info("grants.gov search complete keyword=%s hit_count=%s", keyword, len(hits))
         normalized = [normalize_grants_gov_hit(hit, keyword) for hit in hits]
 
         imported: list[Opportunity] = []
@@ -88,6 +95,7 @@ def _ingest_grants_gov_in_db(
             opportunities=[to_opportunity_read(opportunity) for opportunity in imported],
         )
     except Exception:
+        logger.exception("grants.gov ingestion failed keyword=%s batch_id=%s", keyword, batch.id)
         finish_batch(db, batch, imported_count=0, updated_count=0, skipped_count=0, error_count=1)
         db.commit()
         raise

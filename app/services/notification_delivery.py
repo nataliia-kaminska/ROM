@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -6,6 +7,9 @@ from app.db.models import Notification, NotificationStatus, Opportunity, Opportu
 from app.services.email_delivery import EmailProvider, get_email_provider
 from app.services.notification_factory import create_deadline_notification
 from app.services.notification_preferences import get_or_create_preferences, preferences_allow_deadline_email
+
+
+logger = logging.getLogger(__name__)
 
 
 def mark_notification_sent(notification: Notification) -> Notification:
@@ -56,6 +60,7 @@ def send_reminder_email(
     if profile is None or not profile.email:
         mark_notification_skipped(notification, "missing_profile_email")
         db.commit()
+        logger.info("reminder notification skipped reminder_id=%s reason=missing_profile_email", reminder.id)
         return {"reminder_id": reminder.id, "status": "skipped", "reason": "missing_profile_email"}
 
     preferences = None
@@ -66,6 +71,7 @@ def send_reminder_email(
     if not preferences_allow_deadline_email(preferences):
         mark_notification_skipped(notification, "email_disabled")
         db.commit()
+        logger.info("reminder notification skipped reminder_id=%s reason=email_disabled", reminder.id)
         return {"reminder_id": reminder.id, "status": "skipped", "reason": "email_disabled"}
 
     result = (provider or get_email_provider()).send(profile.email, notification.subject, notification.body)
@@ -77,6 +83,14 @@ def send_reminder_email(
         error=result.error,
     )
     db.commit()
+    logger.info(
+        "reminder notification delivery attempted reminder_id=%s notification_id=%s status=%s provider=%s error=%s",
+        reminder.id,
+        notification.id,
+        notification.status.value,
+        notification.provider,
+        bool(notification.last_error),
+    )
     return {
         "reminder_id": reminder.id,
         "status": notification.status.value,

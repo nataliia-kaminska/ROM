@@ -6,8 +6,8 @@ export const opportunitiesApi = {
   opportunities: (query: Record<string, string | number | boolean | null | undefined>) =>
     request<Opportunity[]>("/opportunities", { query }),
   opportunity: (id: number) => request<Opportunity>(`/opportunities/${id}`),
-  recommendations: (token: string, profileId: number, query: { min_score: number; include_ignored: boolean }) =>
-    request<Recommendation[]>(`/recommendations/${profileId}`, { token, query: { ...query, limit: 100 } }),
+  recommendations: (token: string, profileId: number, query: { min_score: number; include_ignored: boolean; limit: number; offset: number }) =>
+    request<Recommendation[]>(`/recommendations/${profileId}`, { token, query }),
   setStatus: (token: string, profileId: number, opportunityId: number, status: OpportunityStatus, notes = "") =>
     request<StatusRecord>(`/profiles/${profileId}/opportunities/${opportunityId}/status`, {
       token,
@@ -24,7 +24,7 @@ export const opportunitiesApi = {
   externalSourceImport: (body: {
     source_name: string;
     source_url: string;
-    source_kind: "rss" | "json";
+    source_kind: "rss" | "json" | "html";
     import_results: boolean;
     limit: number;
     default_opportunity_type: OpportunityType;

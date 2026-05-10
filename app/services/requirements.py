@@ -1,9 +1,15 @@
 import json
+import logging
 import re
 from dataclasses import asdict, dataclass, field
 
+import httpx
+
+from app.core.config import settings
 from app.db.models import Opportunity, ResearcherProfile, ResearcherProfileDetails
-from app.services.serialization import normalize_terms, unpack_list
+from app.services.serialization import normalize_terms, pack_list, unpack_list
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -18,6 +24,16 @@ class ExtractedRequirements:
     years_since_phd: int | None = None
     snippets: list[str] = field(default_factory=list)
     confidence: int = 0
+
+
+@dataclass
+class ExtractedOpportunityMetadata:
+    disciplines: list[str] = field(default_factory=list)
+    keywords: list[str] = field(default_factory=list)
+    countries: list[str] = field(default_factory=list)
+    career_stages: list[str] = field(default_factory=list)
+    requirements: ExtractedRequirements = field(default_factory=ExtractedRequirements)
+    provider: str = "deterministic"
 
 
 @dataclass
@@ -79,6 +95,45 @@ def extract_requirements_text(title: str, summary: str, eligibility: str) -> Ext
     return requirements
 
 
+def extract_opportunity_metadata(opportunity: Opportunity) -> ExtractedOpportunityMetadata:
+    deterministic = ExtractedOpportunityMetadata(
+        disciplines=unpack_list(opportunity.disciplines),
+        keywords=unpack_list(opportunity.keywords),
+        countries=unpack_list(opportunity.countries),
+        career_stages=unpack_list(opportunity.career_stages),
+        requirements=extract_requirements_text(opportunity.title, opportunity.summary, opportunity.eligibility),
+    )
+    provider = settings.opportunity_extraction_provider.strip().lower()
+    if provider == "groq":
+        ai_result = _extract_with_chat_completion(
+            provider="groq",
+            base_url="https://api.groq.com/openai/v1",
+            api_key=settings.groq_api_key,
+            model=settings.opportunity_extraction_model or settings.groq_model,
+            opportunity=opportunity,
+        )
+    elif provider == "local":
+        ai_result = _extract_with_chat_completion(
+            provider="local",
+            base_url=settings.advisor_local_base_url.rstrip("/"),
+            api_key="local",
+            model=settings.opportunity_extraction_model or settings.advisor_local_model,
+            opportunity=opportunity,
+        )
+    else:
+        ai_result = None
+    if ai_result is None:
+        return deterministic
+    return ExtractedOpportunityMetadata(
+        disciplines=_merge_terms(deterministic.disciplines, ai_result.disciplines),
+        keywords=_merge_terms(deterministic.keywords, ai_result.keywords),
+        countries=_merge_terms(deterministic.countries, ai_result.countries),
+        career_stages=_merge_terms(deterministic.career_stages, ai_result.career_stages),
+        requirements=_merge_requirements(deterministic.requirements, ai_result.requirements),
+        provider=ai_result.provider,
+    )
+
+
 def extract_opportunity_requirements(opportunity: Opportunity) -> ExtractedRequirements:
     stored = getattr(opportunity, "extracted_requirements", "") or ""
     if stored:
@@ -95,10 +150,24 @@ def serialize_requirements(requirements: ExtractedRequirements) -> str:
 
 
 def refresh_opportunity_requirements(opportunity: Opportunity) -> ExtractedRequirements:
-    requirements = extract_requirements_text(opportunity.title, opportunity.summary, opportunity.eligibility)
-    opportunity.extracted_requirements = serialize_requirements(requirements)
-    opportunity.requirements_confidence = requirements.confidence
-    return requirements
+    metadata = extract_opportunity_metadata(opportunity)
+    opportunity.disciplines = pack_list(metadata.disciplines)
+    opportunity.keywords = pack_list(metadata.keywords)
+    opportunity.countries = pack_list(metadata.countries)
+    opportunity.career_stages = pack_list(metadata.career_stages)
+    opportunity.extracted_requirements = serialize_requirements(metadata.requirements)
+    opportunity.requirements_confidence = metadata.requirements.confidence
+    logger.info(
+        "extracted opportunity metadata provider=%s title=%s confidence=%s disciplines=%s keywords=%s countries=%s stages=%s",
+        metadata.provider,
+        opportunity.title,
+        metadata.requirements.confidence,
+        len(metadata.disciplines),
+        len(metadata.keywords),
+        len(metadata.countries),
+        len(metadata.career_stages),
+    )
+    return metadata.requirements
 
 
 def build_gap_analysis(
@@ -202,3 +271,144 @@ def _evidence_snippets(text: str) -> list[str]:
     for pattern in (r"eligible[^.]*\.", r"required[^.]*\.", r"must[^.]*\.", r"open to[^.]*\."):
         snippets.extend(" ".join(match.group(0).split()) for match in re.finditer(pattern, text, re.IGNORECASE))
     return snippets[:5]
+
+
+def _extract_with_chat_completion(
+    provider: str,
+    base_url: str,
+    api_key: str,
+    model: str,
+    opportunity: Opportunity,
+) -> ExtractedOpportunityMetadata | None:
+    if provider == "groq" and not api_key:
+        logger.warning("opportunity extraction provider=groq skipped because GROQ_API_KEY is empty")
+        return None
+    try:
+        response = httpx.post(
+            f"{base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": model,
+                "temperature": 0,
+                "max_tokens": 650,
+                "response_format": {"type": "json_object"},
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "Extract structured academic opportunity metadata. Return only valid JSON. "
+                            "Use short canonical values. Do not include funder names, agencies, offices, URLs, "
+                            "or source names as keywords or disciplines."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {
+                                "schema": {
+                                    "disciplines": ["Computer Science"],
+                                    "keywords": ["machine learning"],
+                                    "countries": ["Germany"],
+                                    "career_stages": ["phd", "postdoc"],
+                                    "required_degree": "phd",
+                                    "languages": ["English"],
+                                    "publication_expectation": "short evidence string",
+                                    "mobility": "short evidence string",
+                                    "citizenship": "short evidence string",
+                                    "years_since_phd": 8,
+                                    "snippets": ["evidence snippet"],
+                                    "confidence": 80,
+                                },
+                                "allowed_career_stages": ["bachelor", "master", "phd", "postdoc", "early_career", "senior"],
+                                "opportunity": {
+                                    "title": opportunity.title,
+                                    "type": opportunity.opportunity_type.value,
+                                    "source": opportunity.source,
+                                    "summary": opportunity.summary,
+                                    "eligibility": opportunity.eligibility,
+                                    "disciplines": unpack_list(opportunity.disciplines),
+                                    "keywords": unpack_list(opportunity.keywords),
+                                    "countries": unpack_list(opportunity.countries),
+                                    "career_stages": unpack_list(opportunity.career_stages),
+                                },
+                            },
+                            ensure_ascii=False,
+                        ),
+                    },
+                ],
+            },
+            timeout=settings.opportunity_extraction_timeout_seconds,
+        )
+        response.raise_for_status()
+        content = response.json()["choices"][0]["message"]["content"]
+        payload = json.loads(content)
+        requirements = ExtractedRequirements(
+            career_stages=_clean_terms(payload.get("career_stages", [])),
+            countries=_clean_terms(payload.get("countries", [])),
+            required_degree=_clean_scalar(payload.get("required_degree", "")),
+            languages=_clean_terms(payload.get("languages", [])),
+            publication_expectation=_clean_scalar(payload.get("publication_expectation", "")),
+            mobility=_clean_scalar(payload.get("mobility", "")),
+            citizenship=_clean_scalar(payload.get("citizenship", "")),
+            years_since_phd=payload.get("years_since_phd") if isinstance(payload.get("years_since_phd"), int) else None,
+            snippets=_clean_terms(payload.get("snippets", []), max_items=5, max_length=180),
+            confidence=max(0, min(95, int(payload.get("confidence", 0) or 0))),
+        )
+        return ExtractedOpportunityMetadata(
+            disciplines=_clean_terms(payload.get("disciplines", [])),
+            keywords=_clean_terms(payload.get("keywords", [])),
+            countries=requirements.countries,
+            career_stages=requirements.career_stages,
+            requirements=requirements,
+            provider=provider,
+        )
+    except Exception as exc:
+        logger.warning("opportunity extraction provider=%s failed; using deterministic fallback: %s", provider, exc)
+        return None
+
+
+def _merge_requirements(left: ExtractedRequirements, right: ExtractedRequirements) -> ExtractedRequirements:
+    return ExtractedRequirements(
+        career_stages=_merge_terms(left.career_stages, right.career_stages),
+        countries=_merge_terms(left.countries, right.countries),
+        required_degree=right.required_degree or left.required_degree,
+        languages=_merge_terms(left.languages, right.languages),
+        publication_expectation=right.publication_expectation or left.publication_expectation,
+        mobility=right.mobility or left.mobility,
+        citizenship=right.citizenship or left.citizenship,
+        years_since_phd=right.years_since_phd if right.years_since_phd is not None else left.years_since_phd,
+        snippets=_merge_terms(left.snippets, right.snippets, max_items=5),
+        confidence=max(left.confidence, right.confidence),
+    )
+
+
+def _merge_terms(*groups: list[str], max_items: int = 12) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for group in groups:
+        for item in _clean_terms(group):
+            key = item.casefold()
+            if key not in seen:
+                seen.add(key)
+                result.append(item)
+    return result[:max_items]
+
+
+def _clean_terms(values: object, max_items: int = 12, max_length: int = 60) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    result = []
+    for value in values:
+        cleaned = _clean_scalar(value, max_length=max_length)
+        if cleaned:
+            result.append(cleaned)
+    return result[:max_items]
+
+
+def _clean_scalar(value: object, max_length: int = 180) -> str:
+    if not isinstance(value, str):
+        return ""
+    cleaned = " ".join(value.strip().split())
+    if len(cleaned) > max_length:
+        return cleaned[:max_length].rstrip()
+    return cleaned

@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.errors import install_error_handlers
 from app.api.v1.router import api_router
@@ -12,10 +14,29 @@ from app.db.session import Base, engine
 from app.services.realtime_notifications import start_redis_notification_listener, stop_redis_notification_listener
 
 
+logger = logging.getLogger(__name__)
+
+
 def create_app() -> FastAPI:
     configure_logging()
+    logger.info(
+        "starting application env=%s debug=%s database=%s redis=%s elasticsearch_enabled=%s websocket_redis_enabled=%s",
+        settings.app_env,
+        settings.debug,
+        settings.database_url.split("@")[-1] if "@" in settings.database_url else settings.database_url,
+        settings.redis_url,
+        settings.elasticsearch_enabled,
+        settings.websocket_redis_enabled,
+    )
     if settings.auto_create_tables:
-        Base.metadata.create_all(bind=engine)
+        logger.info("auto creating database tables")
+        try:
+            Base.metadata.create_all(bind=engine)
+        except SQLAlchemyError:
+            if settings.app_env.lower() in {"local", "test"}:
+                logger.exception("auto table creation failed in local/test mode; continuing startup")
+            else:
+                raise
 
     @asynccontextmanager
     async def lifespan(application: FastAPI):

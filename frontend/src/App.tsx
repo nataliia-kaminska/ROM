@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { api } from "./api";
 import { OpportunityDrawer } from "./components/opportunities";
 import { AppShell, AuthScreen } from "./components/layout";
 import { useAdminOps } from "./hooks/useAdminOps";
@@ -11,16 +10,20 @@ import { useSession } from "./hooks/useSession";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { useWorkspaceSelectors } from "./hooks/useWorkspaceSelectors";
 import { WorkspaceRoutes } from "./routes/WorkspaceRoutes";
+import { VerifyEmailView } from "./views/VerifyEmailView";
 
 function App() {
   const { view, navigateTo } = useAppRoute();
   const [notice, setNotice] = useState("");
+  const [guestMode, setGuestMode] = useState(false);
+  const [profileHighlights, setProfileHighlights] = useState<string[]>([]);
 
   const {
     token,
     user,
     authMode,
     authForm,
+    authNotice,
     profiles,
     activeProfileId,
     loading,
@@ -86,6 +89,7 @@ function App() {
     reminderEligibleOpportunities,
     sourceOptions,
     countryOptions,
+    disciplineOptions,
     keywordOptions,
     visibleViews,
     topMatches,
@@ -110,17 +114,22 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (token) {
-      void workspace.refreshWorkspace(activeProfile);
+    if (token || guestMode) {
+      void workspace.refreshWorkspace(activeProfile, workspace.filters, 1);
     }
-  }, [token, activeProfileId]);
+  }, [token, guestMode, activeProfileId]);
 
   useEffect(() => {
+    const guestViews = new Set(["about", "feed"]);
+    if (guestMode && !guestViews.has(view)) {
+      navigateTo("feed", true);
+      return;
+    }
     if (!token || !user) return;
     if (view === "admin" && user.role !== "admin") {
       navigateTo("dashboard", true);
     }
-  }, [token, user, view]);
+  }, [guestMode, token, user, view]);
 
   useEffect(() => {
     if (!notice) return;
@@ -129,47 +138,61 @@ function App() {
   }, [notice]);
 
   function handleLogout() {
+    setGuestMode(false);
     logout();
     workspace.clearWorkspace();
   }
 
-  if (!token || !user) {
+  function enterGuestMode() {
+    setGuestMode(true);
+    setError("");
+    workspace.clearWorkspace();
+    navigateTo("feed", true);
+  }
+
+  if ((!token || !user) && !guestMode) {
+    if (view === "verify_email") {
+      return <VerifyEmailView onViewChange={navigateTo} />;
+    }
     return (
       <AuthScreen
         authMode={authMode}
         authForm={authForm}
+        authNotice={authNotice}
         error={error}
         loading={loading}
         onSubmit={submitAuth}
         onAuthFormChange={setAuthForm}
         onAuthModeChange={setAuthMode}
+        onContinueAsGuest={enterGuestMode}
       />
     );
   }
 
   return (
     <AppShell
-      apiBaseUrl={api.baseUrl}
       user={user}
+      isGuest={guestMode}
       activeProfile={activeProfile}
       detailsForm={profile.detailsForm}
       view={view}
       visibleViews={visibleViews}
-      workspaceLoading={workspace.workspaceLoading}
       notice={notice}
       error={error}
       onViewChange={navigateTo}
-      onRefresh={() => void workspace.refreshWorkspace(activeProfile)}
       onLogout={handleLogout}
     >
       <WorkspaceRoutes
         route={{ view, onViewChange: navigateTo }}
         workspace={{
           activeProfile,
+          isSignedIn: Boolean(token && user),
           workspaceLoading: workspace.workspaceLoading,
           filters: workspace.filters,
           recommendations: workspace.recommendations,
           opportunities: workspace.opportunities,
+          matchesPage: workspace.matchesPage,
+          matchesHasNextPage: workspace.matchesHasNextPage,
           statuses: workspace.statuses,
           reminders: workspace.reminders,
           reminderForm: workspace.reminderForm,
@@ -181,18 +204,22 @@ function App() {
           reminderEligibleOpportunities,
           sourceOptions,
           countryOptions,
+          disciplineOptions,
           keywordOptions,
+          onProfileFocus: setProfileHighlights,
           onSelectOpportunity: workspace.setSelectedOpportunity,
           onStatus: (opportunityId, status) => void workspace.updateStatus(opportunityId, status),
           onFiltersChange: workspace.setFilters,
-          onApplyFilters: () => void workspace.refreshWorkspace(activeProfile),
+          onApplyFilters: workspace.applyFilters,
           onResetFilters: workspace.resetFilters,
+          onMatchesPageChange: workspace.goToMatchesPage,
           onReminderFormChange: workspace.setReminderForm,
           onCreateReminder: workspace.createReminder,
           onCompleteReminder: (reminderId) => void workspace.completeReminder(reminderId),
         }}
         profile={{
-          userEmail: user.email,
+          userEmail: user?.email ?? "",
+          userFullName: user?.full_name ?? "",
           loading,
           profileForm: profile.profileForm,
           detailsForm: profile.detailsForm,
@@ -201,6 +228,7 @@ function App() {
           onProfileChange: profile.setProfileForm,
           onDetailsChange: profile.setDetailsForm,
           onLoadDetails: () => void profile.loadDetails(),
+          highlightFields: profileHighlights,
           onSaveProfile: profile.saveProfile,
           onSaveDetails: profile.saveDetails,
           onOrcidChange: profile.setOrcidForm,
@@ -212,7 +240,6 @@ function App() {
           notifications: notifications.notifications,
           notificationPrefs: notifications.notificationPrefs,
           onPrefsChange: notifications.setNotificationPrefs,
-          onLoadNotifications: () => void notifications.loadNotifications(),
           onSavePrefs: notifications.saveNotificationPrefs,
           onUnsubscribe: () => void notifications.unsubscribe(),
           onMarkRead: (notificationId) => void notifications.markRead(notificationId),
@@ -233,6 +260,7 @@ function App() {
           adminData: admin.adminData,
           duplicateGroups: admin.duplicateGroups,
           auditLog: admin.auditLog,
+          adminBusy: admin.adminBusy,
           onImportFormChange: admin.setImportForm,
           onGrantsFormChange: admin.setGrantsForm,
           onExternalFormChange: admin.setExternalForm,

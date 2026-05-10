@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.db.models import ResearcherProfile, ResearcherProfileDetails, User
 from app.repositories import profiles as profile_repository
 from app.schemas.profile_details import ResearcherProfileDetailsUpsert
+from app.services.embeddings import persist_profile_embedding_vector
 from app.schemas.profiles import ResearcherProfileCreate
 from app.services.serialization import pack_list
 
@@ -68,4 +69,9 @@ def upsert_profile_details(
     details.max_duration_months = payload.max_duration_months
     db.commit()
     db.refresh(details)
+    profile = db.get(ResearcherProfile, profile_id)
+    if profile is not None:
+        persist_profile_embedding_vector(db, profile, details)
+        db.commit()
+        db.refresh(details)
     return details

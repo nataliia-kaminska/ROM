@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 
+from app.core.config import settings
 from app.services.requirements import extract_requirements_text
 
 
@@ -37,6 +38,63 @@ def test_opportunity_read_exposes_extracted_requirements(client):
     assert body["requirements_confidence"] > 0
     assert "phd" in body["extracted_requirements"]["career_stages"]
     assert "Germany" in body["extracted_requirements"]["countries"]
+
+
+def test_ai_requirement_extraction_enriches_database_metadata(client, monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": """
+                            {
+                              "disciplines": ["Computer Science", "Public Health"],
+                              "keywords": ["clinical AI", "medical imaging"],
+                              "countries": ["Germany"],
+                              "career_stages": ["postdoc"],
+                              "required_degree": "phd",
+                              "languages": ["English"],
+                              "publication_expectation": "Applicants should show a publication record.",
+                              "mobility": "Host institution in Germany.",
+                              "citizenship": "",
+                              "years_since_phd": 5,
+                              "snippets": ["Applicants must hold a PhD."],
+                              "confidence": 88
+                            }
+                            """
+                        }
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(settings, "opportunity_extraction_provider", "groq")
+    monkeypatch.setattr(settings, "groq_api_key", "test-key")
+    monkeypatch.setattr("app.services.requirements.httpx.post", lambda *args, **kwargs: FakeResponse())
+
+    response = client.post(
+        "/opportunities",
+        json={
+            "title": "Clinical AI Fellowship",
+            "opportunity_type": "fellowship",
+            "source": "manual_seed",
+            "url": "https://example.org/clinical-ai-extraction",
+            "summary": "A sparse call description.",
+            "eligibility": "See call page.",
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert "Computer Science" in body["disciplines"]
+    assert "clinical AI" in body["keywords"]
+    assert "Germany" in body["countries"]
+    assert "postdoc" in body["career_stages"]
+    assert body["extracted_requirements"]["required_degree"] == "phd"
+    assert body["requirements_confidence"] == 88
 
 
 def test_recommendations_use_extracted_requirements_when_metadata_is_sparse(client):

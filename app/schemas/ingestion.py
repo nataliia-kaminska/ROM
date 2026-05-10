@@ -21,7 +21,7 @@ class GrantsGovIngestionResult(BaseModel):
 class ExternalSourceImportRequest(BaseModel):
     source_name: str = Field(..., min_length=2)
     source_url: HttpUrl
-    source_kind: str = Field(default="rss", pattern="^(rss|json)$")
+    source_kind: str = Field(default="rss", pattern="^(rss|json|html)$")
     import_results: bool = True
     limit: int = Field(default=25, ge=1, le=100)
     default_opportunity_type: str = "fellowship"

@@ -119,17 +119,160 @@ class MscaConnector(SourceConnector):
         )
 
 
+class NrfuConnector(SourceConnector):
+    source_name = "nrfu"
+    display_name = "National Research Foundation of Ukraine"
+    default_type = OpportunityType.grant
+    default_keywords = ("nrfu", "ukraine", "research grant")
+
+    def normalize(self, item: dict[str, Any]) -> NormalizedSourceItem:
+        normalized = super().normalize(item)
+        return NormalizedSourceItem(
+            **{
+                **normalized.__dict__,
+                "summary": normalized.summary or _first(item, "description", "excerpt", "content"),
+                "eligibility": normalized.eligibility or _first(item, "conditions", "requirements"),
+                "countries": normalized.countries or ["Ukraine"],
+                "career_stages": normalized.career_stages
+                or _career_stages_from_text(f"{normalized.title} {normalized.summary} {normalized.eligibility}"),
+            }
+        )
+
+
+class NaukaGovUaConnector(SourceConnector):
+    source_name = "nauka_gov_ua"
+    display_name = "NAUKA opportunities"
+    default_type = OpportunityType.grant
+    default_keywords = ("nauka.gov.ua", "ukraine", "research")
+
+    def normalize(self, item: dict[str, Any]) -> NormalizedSourceItem:
+        normalized = super().normalize(item)
+        return NormalizedSourceItem(
+            **{
+                **normalized.__dict__,
+                "url": normalized.url or _first(item, "apply", "source_url"),
+                "summary": normalized.summary or _first(item, "description", "excerpt"),
+                "countries": normalized.countries or ["Ukraine"],
+                "career_stages": normalized.career_stages
+                or _career_stages_from_text(f"{normalized.title} {normalized.summary} {normalized.eligibility}"),
+            }
+        )
+
+
+class HouseOfEuropeConnector(SourceConnector):
+    source_name = "house_of_europe"
+    display_name = "House of Europe"
+    default_type = OpportunityType.grant
+    default_keywords = ("house of europe", "ukraine", "eu")
+
+    def normalize(self, item: dict[str, Any]) -> NormalizedSourceItem:
+        normalized = super().normalize(item)
+        item_type = _opportunity_type(_first(item, "type", "programmeType"))
+        return NormalizedSourceItem(
+            **{
+                **normalized.__dict__,
+                "opportunity_type": item_type or normalized.opportunity_type or self.default_type,
+                "summary": normalized.summary or _first(item, "teaser", "description"),
+                "eligibility": normalized.eligibility or _first(item, "who_can_apply", "target_group"),
+                "countries": normalized.countries or ["Ukraine", "European Union"],
+            }
+        )
+
+
+class ScienceForUkraineConnector(SourceConnector):
+    source_name = "science_for_ukraine"
+    display_name = "Science for Ukraine"
+    default_type = OpportunityType.research_position
+    default_keywords = ("science for ukraine", "ukraine", "support")
+
+    def normalize(self, item: dict[str, Any]) -> NormalizedSourceItem:
+        normalized = super().normalize(item)
+        return NormalizedSourceItem(
+            **{
+                **normalized.__dict__,
+                "summary": normalized.summary or _first(item, "description", "details"),
+                "eligibility": normalized.eligibility or _first(item, "eligibility", "target_audience"),
+                "countries": normalized.countries or _list_value(item.get("host_country") or item.get("location")),
+                "career_stages": normalized.career_stages
+                or _career_stages_from_text(f"{normalized.title} {normalized.summary} {normalized.eligibility}"),
+            }
+        )
+
+
+class Msca4UkraineConnector(SourceConnector):
+    source_name = "msca4ukraine"
+    display_name = "MSCA4Ukraine"
+    default_type = OpportunityType.fellowship
+    default_keywords = ("msca4ukraine", "ukraine", "horizon europe", "msca")
+
+    def normalize(self, item: dict[str, Any]) -> NormalizedSourceItem:
+        normalized = super().normalize(item)
+        return NormalizedSourceItem(
+            **{
+                **normalized.__dict__,
+                "summary": normalized.summary or _first(item, "callAbstract", "description"),
+                "eligibility": normalized.eligibility or _first(item, "conditions", "eligible_researchers"),
+                "countries": normalized.countries or ["Ukraine", "European Union"],
+                "deadline": normalized.deadline or _first(item, "deadlineDate", "submissionDeadline"),
+            }
+        )
+
+
+class DaadUkraineConnector(DaadConnector):
+    source_name = "daad_ukraine"
+    display_name = "DAAD Ukraine"
+    default_keywords = ("daad", "ukraine", "germany", "future ukraine")
+
+    def normalize(self, item: dict[str, Any]) -> NormalizedSourceItem:
+        normalized = super().normalize(item)
+        return NormalizedSourceItem(
+            **{
+                **normalized.__dict__,
+                "countries": normalized.countries or ["Germany", "Ukraine"],
+                "career_stages": normalized.career_stages
+                or _career_stages_from_text(f"{normalized.title} {normalized.summary} {normalized.eligibility}"),
+            }
+        )
+
+
+class FulbrightUkraineConnector(FulbrightConnector):
+    source_name = "fulbright_ukraine"
+    display_name = "Fulbright Ukraine"
+    default_keywords = ("fulbright", "ukraine", "exchange", "united states")
+
+    def normalize(self, item: dict[str, Any]) -> NormalizedSourceItem:
+        normalized = super().normalize(item)
+        return NormalizedSourceItem(
+            **{
+                **normalized.__dict__,
+                "countries": normalized.countries or ["United States", "Ukraine"],
+                "career_stages": normalized.career_stages
+                or _career_stages_from_text(f"{normalized.title} {normalized.summary} {normalized.eligibility}"),
+            }
+        )
+
+
 CONNECTORS: dict[str, SourceConnector] = {
     "euraxess": EuraxessConnector(),
     "daad": DaadConnector(),
+    "daad_ukraine": DaadUkraineConnector(),
     "fulbright": FulbrightConnector(),
+    "fulbright_ukraine": FulbrightUkraineConnector(),
+    "house_of_europe": HouseOfEuropeConnector(),
     "msca": MscaConnector(),
+    "msca4ukraine": Msca4UkraineConnector(),
+    "nauka_gov_ua": NaukaGovUaConnector(),
+    "nrfu": NrfuConnector(),
+    "science_for_ukraine": ScienceForUkraineConnector(),
 }
 
 
 def get_source_connector(source_name: str) -> SourceConnector:
     normalized = source_name.strip().lower().replace(" ", "_").replace("-", "_")
-    for key, connector in CONNECTORS.items():
+    exact_match = CONNECTORS.get(normalized)
+    if exact_match:
+        return exact_match
+    for key, connector in sorted(CONNECTORS.items(), key=lambda candidate: len(candidate[0]), reverse=True):
         if key in normalized:
             return connector
     return SourceConnector()
@@ -158,4 +301,22 @@ def _list_value(value: Any) -> list[str]:
 
 def _opportunity_type(value: str) -> OpportunityType | None:
     normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
+    if normalized in {"scholarship", "award", "grant"}:
+        return OpportunityType.fellowship if normalized == "scholarship" else OpportunityType.grant
     return OpportunityType(normalized) if normalized in {item.value for item in OpportunityType} else None
+
+
+def _career_stages_from_text(value: str) -> list[str]:
+    normalized = value.casefold()
+    stages: list[str] = []
+    stage_terms = {
+        "masters": ("master", "masters", "master's"),
+        "phd": ("phd", "doctoral", "doctorate", "candidate of sciences"),
+        "postdoc": ("postdoc", "postdoctoral"),
+        "faculty": ("professor", "lecturer", "teacher", "doctor of sciences"),
+        "early-career": ("early career", "young scientist", "young researchers"),
+    }
+    for stage, terms in stage_terms.items():
+        if any(term in normalized for term in terms):
+            stages.append(stage)
+    return stages

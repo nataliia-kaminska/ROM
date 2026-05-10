@@ -3,13 +3,14 @@ import { api } from "../api";
 import type { Profile, User } from "../types";
 
 type AuthMode = "login" | "register";
-type AuthForm = { email: string; password: string; full_name: string };
+type AuthForm = { email: string; password: string; confirm_password: string; full_name: string };
 
 export function useSession({ onLogout }: { onLogout?: () => void } = {}) {
   const [token, setToken] = useState(() => localStorage.getItem("rom_token"));
   const [user, setUser] = useState<User | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
-  const [authForm, setAuthForm] = useState<AuthForm>({ email: "", password: "", full_name: "" });
+  const [authForm, setAuthForm] = useState<AuthForm>({ email: "", password: "", confirm_password: "", full_name: "" });
+  const [authNotice, setAuthNotice] = useState("");
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -21,9 +22,10 @@ export function useSession({ onLogout }: { onLogout?: () => void } = {}) {
     setError("");
     try {
       const [me, ownedProfiles] = await Promise.all([api.me(nextToken), api.profiles(nextToken)]);
+      const availableProfiles = ownedProfiles.length > 0 ? ownedProfiles : [await createStarterProfile(nextToken, me)];
       setUser(me);
-      setProfiles(ownedProfiles);
-      const chosen = ownedProfiles.find((profile) => profile.id === preferredProfileId) ?? ownedProfiles[0] ?? null;
+      setProfiles(availableProfiles);
+      const chosen = availableProfiles.find((profile) => profile.id === preferredProfileId) ?? availableProfiles[0] ?? null;
       setActiveProfileId(chosen?.id ?? null);
     } catch (sessionError) {
       setError((sessionError as Error).message);
@@ -33,19 +35,49 @@ export function useSession({ onLogout }: { onLogout?: () => void } = {}) {
     }
   }
 
+  async function createStarterProfile(nextToken: string, me: User) {
+    return api.createProfile(nextToken, {
+      full_name: me.full_name || me.email,
+      email: me.email,
+      career_stage: "phd",
+      country: null,
+      disciplines: [],
+      keywords: [],
+      preferred_countries: [],
+      orcid_id: null,
+      google_scholar_url: null,
+      linkedin_url: null,
+    });
+  }
+
   async function submitAuth(event: FormEvent) {
     event.preventDefault();
     if (!authForm.email || !authForm.password || (authMode === "register" && !authForm.full_name)) {
       setError("Email, password, and name are required.");
       return;
     }
+    if (authMode === "register") {
+      const fullNameError = validateFullName(authForm.full_name);
+      if (fullNameError) {
+        setError(fullNameError);
+        return;
+      }
+      if (authForm.password !== authForm.confirm_password) {
+        setError("Password confirmation must match the password.");
+        return;
+      }
+    }
     setLoading(true);
     setError("");
     try {
-      const response =
-        authMode === "register"
-          ? await api.register(authForm)
-          : await api.login({ email: authForm.email, password: authForm.password });
+      if (authMode === "register") {
+        const response = await api.register({ email: authForm.email, password: authForm.password, full_name: authForm.full_name.trim() });
+        setAuthNotice(response.message);
+        setAuthMode("login");
+        setAuthForm({ email: response.email, password: "", confirm_password: "", full_name: "" });
+        return;
+      }
+      const response = await api.login({ email: authForm.email, password: authForm.password });
       localStorage.setItem("rom_token", response.access_token);
       setToken(response.access_token);
       setUser(response.user);
@@ -71,6 +103,7 @@ export function useSession({ onLogout }: { onLogout?: () => void } = {}) {
     user,
     authMode,
     authForm,
+    authNotice,
     profiles,
     activeProfileId,
     loading,
@@ -85,4 +118,12 @@ export function useSession({ onLogout }: { onLogout?: () => void } = {}) {
     submitAuth,
     logout,
   };
+}
+
+function validateFullName(value: string): string {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (normalized.length < 3) return "Full name must be at least 3 characters.";
+  if (!normalized.includes(" ")) return "Please enter at least first and last name.";
+  if (!/^[A-Za-zÀ-žА-Яа-яІіЇїЄєҐґ' -]+$/.test(normalized)) return "Full name can contain only letters, spaces, hyphens, and apostrophes.";
+  return "";
 }

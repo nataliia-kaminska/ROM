@@ -12,6 +12,8 @@ export function Field({
   disabled,
   list,
   title,
+  required,
+  className = "",
 }: {
   labelText: string;
   value: string;
@@ -21,10 +23,12 @@ export function Field({
   disabled?: boolean;
   list?: string;
   title?: string;
+  required?: boolean;
+  className?: string;
 }) {
   return (
-    <label className="field">
-      <span>{labelText}</span>
+    <label className={`field ${className}`}>
+      <span>{labelText}{required && <b className="required-mark">Required</b>}</span>
       <input
         type={type}
         value={value}
@@ -32,6 +36,7 @@ export function Field({
         disabled={disabled}
         list={list}
         title={title}
+        required={required}
         onChange={(event) => onChange(event.target.value)}
       />
     </label>
@@ -74,6 +79,7 @@ export function MultiValueField({
   placeholder = "Comma-separated values",
   help,
   suggestions = [],
+  className = "",
 }: {
   labelText: string;
   values: string[];
@@ -81,6 +87,7 @@ export function MultiValueField({
   placeholder?: string;
   help?: string;
   suggestions?: string[];
+  className?: string;
 }) {
   const [draft, setDraft] = useState("");
   const normalizedValues = useMemo(() => new Set(values.map((value) => value.toLowerCase())), [values]);
@@ -102,7 +109,7 @@ export function MultiValueField({
   }
 
   return (
-    <div className="field">
+    <div className={`field ${className}`}>
       <span>
         {labelText}
         {help && <HelpTip text={help} />}
@@ -226,16 +233,20 @@ export function SelectField<T extends string>({
   value,
   options,
   onChange,
+  required,
+  className = "",
 }: {
   labelText: string;
   value: T;
   options: T[];
   onChange: (value: T) => void;
+  required?: boolean;
+  className?: string;
 }) {
   return (
-    <label className="field">
-      <span>{labelText}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value as T)}>
+    <label className={`field ${className}`}>
+      <span>{labelText}{required && <b className="required-mark">Required</b>}</span>
+      <select value={value} required={required} onChange={(event) => onChange(event.target.value as T)}>
         {options.map((option) => (
           <option key={option} value={option}>
             {label(option)}
@@ -251,6 +262,26 @@ export function EmptyState({ title, detail }: { title: string; detail: string })
     <div className="empty">
       <strong>{title}</strong>
       <p>{detail}</p>
+    </div>
+  );
+}
+
+export function ToastStack({ notice, error }: { notice: string; error: string }) {
+  if (!notice && !error) return null;
+  return (
+    <div className="toast-stack" aria-live="polite" aria-atomic="true">
+      {error && (
+        <div className="toast error">
+          <strong>Action failed</strong>
+          <span>{error}</span>
+        </div>
+      )}
+      {notice && (
+        <div className="toast success">
+          <strong>Done</strong>
+          <span>{notice}</span>
+        </div>
+      )}
     </div>
   );
 }

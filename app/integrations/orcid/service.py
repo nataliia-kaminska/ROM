@@ -1,12 +1,18 @@
+import logging
+
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.exceptions import ForbiddenError
 from app.db.models import ResearcherProfile, User
 from app.integrations.orcid.client import OrcidClient
 from app.integrations.orcid.mapper import extract_profile_payload
 from app.schemas.orcid import OrcidImportPreview, OrcidImportRequest
+from app.services.profile_enrichment import enrich_profile_from_openalex
 from app.services.results import OrcidProfileImportResult
 from app.services.serialization import pack_list, unpack_list
+
+logger = logging.getLogger(__name__)
 
 
 def import_orcid_profile(
@@ -47,6 +53,16 @@ def import_orcid_profile(
 
     db.commit()
     db.refresh(profile)
+    if settings.profile_enrichment_auto_openalex:
+        try:
+            enriched = enrich_profile_from_openalex(db, profile, orcid_id=payload.orcid_id)
+            if enriched is not None:
+                db.commit()
+                db.refresh(profile)
+                logger.info("orcid import auto-enriched profile from openalex profile_id=%s", profile.id)
+        except Exception:
+            db.rollback()
+            logger.exception("orcid import openalex auto-enrichment failed profile_id=%s", profile.id)
 
     preview = OrcidImportPreview(
         full_name=extracted["full_name"],

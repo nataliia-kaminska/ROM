@@ -8,30 +8,47 @@ export function DashboardView({
   nextAction,
   topMatches,
   plannedStatuses,
+  statuses,
   nextReminder,
   opportunitiesById,
   canTrack,
   onViewChange,
+  onProfileFocus,
   onSelectOpportunity,
   onStatus,
 }: {
-  nextAction: { title: string; detail: string; target: View };
+  nextAction: { title: string; detail: string; target: View; focusFields?: string[] };
   topMatches: Recommendation[];
   plannedStatuses: StatusRecord[];
+  statuses: StatusRecord[];
   nextReminder: Reminder | null;
   opportunitiesById: ReadonlyMap<number, Opportunity>;
   canTrack: boolean;
   onViewChange: (view: View) => void;
+  onProfileFocus: (fields: string[]) => void;
   onSelectOpportunity: (opportunity: Opportunity) => void;
   onStatus: (opportunityId: number, status: OpportunityStatus) => void;
 }) {
+  const recentSavedStatus = [...statuses]
+    .filter((status) => ["saved", "planned", "applied"].includes(status.status))
+    .sort((a, b) => b.id - a.id)[0] ?? null;
+  const recentSavedOpportunity = recentSavedStatus ? opportunitiesById.get(recentSavedStatus.opportunity_id) ?? null : null;
+
   return (
     <section className="dashboard-grid">
       <article className="panel next-action">
         <p className="eyebrow">Next best action</p>
         <h2>{nextAction.title}</h2>
         <p>{nextAction.detail}</p>
-        <button className="primary" onClick={() => onViewChange(nextAction.target)}>
+        <button
+          className="primary"
+          onClick={() => {
+            if (nextAction.target === "profile") {
+              onProfileFocus(nextAction.focusFields ?? []);
+            }
+            onViewChange(nextAction.target);
+          }}
+        >
           Go there
         </button>
       </article>
@@ -45,10 +62,24 @@ export function DashboardView({
         <strong>{plannedStatuses.length}</strong>
         <p className="muted">Planned or submitted opportunities.</p>
       </article>
-      <article className="panel metric-panel">
-        <span>Next reminder</span>
-        <strong>{nextReminder?.remind_on ?? "None"}</strong>
-        <p className="muted">{nextReminder ? opportunitiesById.get(nextReminder.opportunity_id)?.title ?? "Opportunity reminder" : "Plan an opportunity to start reminders."}</p>
+      <article className="panel reminder-panel">
+        <div className="reminder-split">
+          <div>
+            <span>Next reminder</span>
+            <strong>{nextReminder?.remind_on ?? "None"}</strong>
+            <p className="muted">{nextReminder ? opportunitiesById.get(nextReminder.opportunity_id)?.title ?? "Opportunity reminder" : "Plan an opportunity to start reminders."}</p>
+          </div>
+          <div>
+            <span>Latest saved</span>
+            {recentSavedOpportunity ? (
+              <button className="recent-link" type="button" onClick={() => onSelectOpportunity(recentSavedOpportunity)}>
+                {recentSavedOpportunity.title}
+              </button>
+            ) : (
+              <p className="muted">Save an opportunity to keep it visible here.</p>
+            )}
+          </div>
+        </div>
       </article>
       <section className="panel span-2">
         <div className="section-title">
@@ -70,24 +101,7 @@ export function DashboardView({
               onStatus={(status) => onStatus(item.opportunity.id, status)}
             />
           ))}
-          {topMatches.length === 0 && <EmptyState title="No matches yet" detail="Complete your profile or import opportunities, then refresh the workspace." />}
-        </div>
-      </section>
-      <section className="panel workflow-panel">
-        <h2>Workspace Guide</h2>
-        <div className="workflow-list">
-          <button type="button" onClick={() => onViewChange("profile")}>
-            <strong>Profile</strong>
-            <span>Controls eligibility, keywords, readiness, and gaps.</span>
-          </button>
-          <button type="button" onClick={() => onViewChange("feed")}>
-            <strong>Matches</strong>
-            <span>Review ranked opportunities and teach preferences.</span>
-          </button>
-          <button type="button" onClick={() => onViewChange("assistant")}>
-            <strong>Apply Assistant</strong>
-            <span>Turns saved/planned opportunities into an application plan.</span>
-          </button>
+          {topMatches.length === 0 && <EmptyState title="No matches yet" detail="Complete your profile or import opportunities, then open Matches to review the latest results." />}
         </div>
       </section>
     </section>

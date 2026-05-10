@@ -38,11 +38,15 @@ export function useProfileForms({
 
   useEffect(() => {
     if (!activeProfile) {
-      setProfileForm(blankProfile);
+      setProfileForm({
+        ...blankProfile,
+        full_name: user?.full_name ?? "",
+        email: user?.email ?? "",
+      });
       return;
     }
     setProfileForm({
-      full_name: activeProfile.full_name,
+      full_name: user?.full_name || activeProfile.full_name,
       email: activeProfile.email,
       career_stage: activeProfile.career_stage,
       country: activeProfile.country,
@@ -53,13 +57,23 @@ export function useProfileForms({
       google_scholar_url: activeProfile.google_scholar_url,
       linkedin_url: activeProfile.linkedin_url,
     });
-  }, [activeProfile?.id]);
+  }, [activeProfile?.id, user?.email, user?.full_name]);
+
+  useEffect(() => {
+    if (!token || !activeProfile) {
+      setDetailsForm(blankDetails);
+      return;
+    }
+    void loadDetails();
+  }, [token, activeProfile?.id]);
 
   async function saveProfile(event: FormEvent) {
     event.preventDefault();
     if (!token) return;
-    if (!profileForm.full_name || !profileForm.career_stage) {
-      setError("Full name and career stage are required.");
+    const accountName = normalizeText(user?.full_name ?? null) ?? normalizeText(profileForm.full_name);
+    const homeCountry = normalizeText(profileForm.country);
+    if (!accountName || !profileForm.career_stage || !homeCountry) {
+      setError("Account name, career stage, and home country are required.");
       return;
     }
     setLoading(true);
@@ -67,8 +81,9 @@ export function useProfileForms({
     try {
       const payload = {
         ...profileForm,
+        full_name: accountName,
         email: user?.email ?? normalizeText(profileForm.email),
-        country: normalizeText(profileForm.country),
+        country: homeCountry,
         orcid_id: normalizeText(profileForm.orcid_id),
         google_scholar_url: normalizeUrl(profileForm.google_scholar_url),
         linkedin_url: normalizeUrl(profileForm.linkedin_url),

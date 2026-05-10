@@ -1,7 +1,10 @@
 import hashlib
 import json
+import logging
 import math
 import re
+import subprocess
+import sys
 from datetime import datetime
 from functools import lru_cache
 from typing import Protocol
@@ -13,6 +16,7 @@ from app.core.config import settings
 from app.db.models import Opportunity, ResearcherProfile, ResearcherProfileDetails
 from app.services.serialization import unpack_list
 
+logger = logging.getLogger(__name__)
 
 STOP_WORDS = {
     "about",
@@ -65,13 +69,31 @@ class SentenceTransformerEmbeddingProvider:
         try:
             from sentence_transformers import SentenceTransformer
         except ImportError as exc:
+            if settings.embedding_auto_install:
+                _install_sentence_transformers()
+                try:
+                    from sentence_transformers import SentenceTransformer
+                except ImportError as retry_exc:
+                    raise RuntimeError(
+                        "sentence-transformers auto-install completed but the package is still unavailable. "
+                        "Restart the backend or install with `pip install -e .[embeddings]`."
+                    ) from retry_exc
+            else:
+                raise RuntimeError(
+                    "sentence-transformers is not installed. Install with `pip install -e .[embeddings]`, "
+                    "set EMBEDDING_AUTO_INSTALL=true, or set EMBEDDING_PROVIDER=hash."
+                ) from exc
+        logger.info("loading sentence-transformers embedding model model=%s", model_name)
+        try:
+            self.model = SentenceTransformer(model_name)
+        except Exception as exc:
             raise RuntimeError(
-                "sentence-transformers is not installed. Install with `pip install -e .[embeddings]` "
-                "or set EMBEDDING_PROVIDER=hash."
+                f"Could not load embedding model `{model_name}`. Check network/model cache, "
+                "or set EMBEDDING_PROVIDER=hash for offline deterministic embeddings."
             ) from exc
         self.model_name = model_name
-        self.model = SentenceTransformer(model_name)
-        self.dimensions = int(self.model.get_sentence_embedding_dimension())
+        dimension_getter = getattr(self.model, "get_embedding_dimension", self.model.get_sentence_embedding_dimension)
+        self.dimensions = int(dimension_getter())
 
     def embed(self, text: str) -> list[float]:
         vector = self.model.encode(text or "", normalize_embeddings=True)
@@ -82,8 +104,28 @@ class SentenceTransformerEmbeddingProvider:
 def get_embedding_provider() -> EmbeddingProvider:
     provider = settings.embedding_provider.lower().strip()
     if provider in {"sentence_transformers", "local_model", "local"}:
-        return SentenceTransformerEmbeddingProvider(settings.embedding_model_name)
+        try:
+            return SentenceTransformerEmbeddingProvider(settings.embedding_model_name)
+        except RuntimeError as exc:
+            logger.warning(
+                "embedding provider unavailable provider=%s model=%s fallback=hash dimensions=%s error=%s",
+                provider,
+                settings.embedding_model_name,
+                settings.embedding_dimensions,
+                exc,
+            )
+            return HashEmbeddingProvider(settings.embedding_dimensions)
     return HashEmbeddingProvider(settings.embedding_dimensions)
+
+
+def _install_sentence_transformers() -> None:
+    logger.warning("sentence-transformers is missing; attempting auto-install because EMBEDDING_AUTO_INSTALL=true")
+    command = [sys.executable, "-m", "pip", "install", "sentence-transformers>=3.0.0"]
+    result = subprocess.run(command, capture_output=True, text=True, timeout=300, check=False)
+    if result.returncode != 0:
+        stderr = (result.stderr or result.stdout or "").strip()[-1200:]
+        raise RuntimeError(f"sentence-transformers auto-install failed: {stderr}")
+    logger.info("sentence-transformers auto-install completed")
 
 
 def profile_embedding_text(profile: ResearcherProfile, details: ResearcherProfileDetails | None = None) -> str:
@@ -179,6 +221,36 @@ def ensure_opportunity_embedding(opportunity: Opportunity) -> list[float]:
     return vector
 
 
+def persist_opportunity_embedding_vector(db: Session, opportunity: Opportunity) -> None:
+    vector = ensure_opportunity_embedding(opportunity)
+    if not (db.bind and db.bind.dialect.name == "postgresql" and opportunity.id):
+        return
+    db.execute(
+        text(
+            "UPDATE opportunities "
+            "SET opportunity_embedding_vector = CAST(:vector AS vector) "
+            "WHERE id = :id"
+        ),
+        {"vector": vector_literal(vector), "id": opportunity.id},
+    )
+    logger.info("persisted opportunity pgvector embedding opportunity_id=%s model=%s", opportunity.id, opportunity.embedding_model)
+
+
+def persist_profile_embedding_vector(db: Session, profile: ResearcherProfile, details: ResearcherProfileDetails) -> None:
+    vector = ensure_profile_embedding(profile, details)
+    if not (db.bind and db.bind.dialect.name == "postgresql" and details.id):
+        return
+    db.execute(
+        text(
+            "UPDATE researcher_profile_details "
+            "SET profile_embedding_vector = CAST(:vector AS vector) "
+            "WHERE id = :id"
+        ),
+        {"vector": vector_literal(vector), "id": details.id},
+    )
+    logger.info("persisted profile pgvector embedding profile_id=%s model=%s", profile.id, details.embedding_model)
+
+
 def vector_literal(vector: list[float]) -> str:
     return "[" + ",".join(f"{value:.8f}" for value in vector) + "]"
 
@@ -189,14 +261,7 @@ def refresh_opportunity_embeddings(db: Session) -> dict:
         opportunity.opportunity_embedding = ""
         vector = ensure_opportunity_embedding(opportunity)
         if db.bind and db.bind.dialect.name == "postgresql":
-            db.execute(
-                text(
-                    "UPDATE opportunities "
-                    "SET opportunity_embedding_vector = CAST(:vector AS vector) "
-                    "WHERE id = :id"
-                ),
-                {"vector": vector_literal(vector), "id": opportunity.id},
-            )
+            persist_opportunity_embedding_vector(db, opportunity)
     db.commit()
     return {"opportunity_count": len(opportunities)}
 
@@ -211,14 +276,7 @@ def refresh_profile_embeddings(db: Session) -> dict:
         details.profile_embedding = ""
         vector = ensure_profile_embedding(profile, details)
         if db.bind and db.bind.dialect.name == "postgresql":
-            db.execute(
-                text(
-                    "UPDATE researcher_profile_details "
-                    "SET profile_embedding_vector = CAST(:vector AS vector) "
-                    "WHERE id = :id"
-                ),
-                {"vector": vector_literal(vector), "id": details.id},
-            )
+            persist_profile_embedding_vector(db, profile, details)
         refreshed += 1
     db.commit()
     return {"profile_count": refreshed}

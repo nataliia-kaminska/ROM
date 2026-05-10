@@ -5,9 +5,9 @@ export const careerStages: CareerStage[] = ["bachelor", "master", "phd", "postdo
 export const opportunityTypes: OpportunityType[] = ["grant", "exchange", "fellowship", "internship", "research_position", "training"];
 export const trackedStatuses: OpportunityStatus[] = ["saved", "planned", "applied", "accepted", "rejected", "ignored"];
 export const reminderStatuses: OpportunityStatus[] = ["saved", "planned"];
-export const researcherViews = ["dashboard", "feed", "profile", "board", "assistant", "reminders", "notifications"] as const;
+export const researcherViews = ["about", "dashboard", "feed", "profile", "board", "assistant", "reminders", "notifications"] as const;
 
-export type View = "dashboard" | "feed" | "profile" | "board" | "reminders" | "notifications" | "assistant" | "admin";
+export type View = "dashboard" | "feed" | "profile" | "board" | "reminders" | "notifications" | "assistant" | "about" | "verify_email" | "admin";
 export type DetailTab = "overview" | "reasons" | "eligibility" | "assistant" | "reminders";
 
 export const viewRoutes: Record<View, string> = {
@@ -16,6 +16,8 @@ export const viewRoutes: Record<View, string> = {
   profile: "/profile",
   board: "/board",
   assistant: "/assistant",
+  about: "/about",
+  verify_email: "/verify-email",
   reminders: "/reminders",
   notifications: "/notifications",
   admin: "/admin",

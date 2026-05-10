@@ -10,12 +10,18 @@ export type User = {
   full_name: string;
   role: "researcher" | "admin";
   is_active: boolean;
+  email_verified: boolean;
 };
 
 export type AuthResponse = {
   access_token: string;
   token_type: string;
   user: User;
+};
+
+export type RegisterResponse = {
+  message: string;
+  email: string;
 };
 
 export type Profile = {
@@ -153,6 +159,7 @@ export type NotificationPreference = {
 export type ApplicationAssistantResult = {
   opportunity_id: number;
   profile_id: number;
+  retrieved_context: string[];
   application_checklist: string[];
   motivation_letter_outline: string[];
   research_fit_statement: string;

@@ -23,6 +23,7 @@ export function useNotifications({
 
   useEffect(() => {
     if (!token) return;
+    void loadNotifications();
     const websocket = new WebSocket(`${websocketBaseUrl()}/ws/notifications?token=${encodeURIComponent(token)}`);
     websocket.onmessage = (event) => {
       const incoming = JSON.parse(event.data) as Partial<NotificationItem>;

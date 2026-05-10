@@ -1,4 +1,6 @@
 from app.services.openalex import extract_openalex_profile
+from app.core.config import settings
+from app.services.profile_enrichment import normalize_profile_concepts
 
 
 AUTHOR = {
@@ -58,5 +60,40 @@ def test_openalex_import_enriches_profile_details(client, monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert "Bioinformatics" in body["profile"]["keywords"]
+    assert "Bioinformatics" in body["profile"]["disciplines"]
     assert "Graph neural networks for genomics" in body["details"]["publications"]
     assert "Genomics" in body["details"]["funding_interests"]
+
+
+def test_profile_concept_normalizer_can_use_ai(monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": """
+                            {
+                              "disciplines": ["Computer Science", "Medicine"],
+                              "keywords": ["clinical AI", "medical imaging"],
+                              "funding_interests": ["digital health"]
+                            }
+                            """
+                        }
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(settings, "profile_enrichment_provider", "groq")
+    monkeypatch.setattr(settings, "groq_api_key", "test-key")
+    monkeypatch.setattr("app.services.profile_enrichment.httpx.post", lambda *args, **kwargs: FakeResponse())
+
+    result = normalize_profile_concepts(["Machine learning", "Radiology"])
+
+    assert result.provider == "groq"
+    assert "Computer Science" in result.disciplines
+    assert "clinical AI" in result.keywords
+    assert "digital health" in result.funding_interests

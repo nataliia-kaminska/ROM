@@ -23,8 +23,10 @@ export function viewLabel(value: View): string {
     profile: "Profile",
     board: "Application Board",
     assistant: "Apply Assistant",
-    reminders: "Reminders",
-    notifications: "Notifications",
+    about: "How It Works",
+    verify_email: "Verify Email",
+    reminders: "Application Reminders",
+    notifications: "Notification Center",
     admin: "Admin",
   };
   return labels[value];

@@ -1,19 +1,52 @@
 .grid-form {
   display: grid;
-  gap: 16px;
+  gap: var(--space-4);
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .field {
   display: grid;
-  gap: 7px;
+  gap: var(--space-2);
+}
+
+.field-highlight {
+  background: var(--soft-green);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+}
+
+.field-highlight > span::after {
+  background: var(--accent);
+  border-radius: 999px;
+  color: var(--primary);
+  content: "Next step";
+  font-size: 10px;
+  font-weight: 900;
+  padding: 2px var(--space-2);
+  text-transform: uppercase;
 }
 
 .field span,
 .toggle {
+  align-items: center;
   color: #4b5f56;
-  font-size: 13px;
+  display: flex;
+  font-size: var(--text-sm);
   font-weight: 700;
+  gap: var(--space-2);
+}
+
+.required-mark {
+  background: var(--soft-green);
+  border: 1px solid #cfdbd3;
+  border-radius: 999px;
+  color: #40544b;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0;
+  padding: 2px var(--space-2);
+  text-transform: uppercase;
 }
 
 input,
@@ -21,11 +54,19 @@ select,
 textarea {
   background: #fff;
   border: 1px solid #cfc6b7;
-  border-radius: 8px;
-  color: #16201c;
-  min-height: 42px;
-  padding: 10px 12px;
+  border-radius: var(--radius);
+  color: var(--ink);
+  min-height: var(--button-height);
+  padding: var(--control-padding-y) var(--control-padding-x);
   width: 100%;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #4f8f72;
+  box-shadow: 0 0 0 3px var(--focus);
+  outline: 0;
 }
 
 input:disabled {
@@ -46,17 +87,17 @@ textarea {
   align-items: center;
   background: #ffffff;
   border: 1px solid #cfc6b7;
-  border-radius: 8px;
+  border-radius: var(--radius);
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  min-height: 42px;
-  padding: 6px;
+  gap: var(--space-2);
+  min-height: var(--button-height);
+  padding: var(--space-2);
 }
 
 .tag-editor:focus-within {
   border-color: #4f8f72;
-  box-shadow: 0 0 0 3px rgba(79, 143, 114, 0.12);
+  box-shadow: 0 0 0 3px var(--focus);
 }
 
 .tag-editor button,
@@ -65,10 +106,10 @@ textarea {
   border: 1px solid #cfdbd3;
   border-radius: 999px;
   color: #354940;
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 800;
   min-height: 28px;
-  padding: 4px 9px;
+  padding: var(--space-1) var(--space-2);
 }
 
 .tag-editor button::after {
@@ -82,7 +123,7 @@ textarea {
   flex: 1 1 160px;
   min-height: 28px;
   min-width: 130px;
-  padding: 4px;
+  padding: var(--space-1);
   width: auto;
 }
 
@@ -93,11 +134,12 @@ textarea {
 .suggestions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
 }
 
 .suggestions button {
-  background: #fffdf8;
+  background: var(--panel);
 }
 
 .suggestions button:hover {
@@ -108,7 +150,7 @@ textarea {
 .inline-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .inline-tags span {
@@ -116,14 +158,14 @@ textarea {
   border: 1px solid #cfdbd3;
   border-radius: 999px;
   color: #354940;
-  font-size: 12px;
-  padding: 4px 8px;
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
 }
 
 .toggle {
   align-items: center;
   display: flex;
-  gap: 10px;
+  gap: var(--space-2);
 }
 
 .toggle input {
@@ -135,7 +177,7 @@ textarea {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .title-with-help h2 {
@@ -150,12 +192,12 @@ textarea {
   color: #16362d;
   cursor: help;
   display: inline-flex;
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 900;
   height: 20px;
   justify-content: center;
   line-height: 1;
-  margin-left: 6px;
+  margin-left: var(--space-1);
   position: relative;
   width: 20px;
 }
@@ -163,17 +205,17 @@ textarea {
 .help-tip:hover::after,
 .help-tip:focus::after {
   background: #16201c;
-  border-radius: 8px;
-  bottom: calc(100% + 8px);
+  border-radius: var(--radius);
+  bottom: calc(100% + var(--space-2));
   color: #f7f4ec;
   content: attr(data-tip);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 700;
   left: 50%;
   line-height: 1.35;
   max-width: 280px;
   min-width: 220px;
-  padding: 10px 12px;
+  padding: var(--control-padding-y) var(--control-padding-x);
   position: absolute;
   text-transform: none;
   transform: translateX(-50%);

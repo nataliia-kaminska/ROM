@@ -22,6 +22,7 @@ def test_admin_dashboard_and_manual_opportunity_edit(client):
     headers = _admin_headers(client)
     created = client.post(
         "/opportunities",
+        headers=headers,
         json={
             "title": "Original Grant",
             "opportunity_type": "grant",
@@ -62,6 +63,7 @@ def test_admin_duplicate_merge_moves_status_records(client):
     ).json()
     target = client.post(
         "/opportunities",
+        headers=headers,
         json={
             "title": "Duplicate Grant",
             "opportunity_type": "grant",
@@ -71,6 +73,7 @@ def test_admin_duplicate_merge_moves_status_records(client):
     ).json()
     duplicate = client.post(
         "/opportunities",
+        headers=headers,
         json={
             "title": "Duplicate Grant",
             "opportunity_type": "grant",
@@ -106,6 +109,7 @@ def test_admin_duplicate_merge_handles_status_and_reminder_conflicts(client):
     ).json()
     target = client.post(
         "/opportunities",
+        headers=headers,
         json={
             "title": "Conflict Grant",
             "opportunity_type": "grant",
@@ -116,6 +120,7 @@ def test_admin_duplicate_merge_handles_status_and_reminder_conflicts(client):
     ).json()
     duplicate = client.post(
         "/opportunities",
+        headers=headers,
         json={
             "title": "Conflict Grant",
             "opportunity_type": "grant",

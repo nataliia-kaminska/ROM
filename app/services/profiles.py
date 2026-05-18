@@ -1,11 +1,13 @@
 from sqlalchemy.orm import Session
+import logging
 
 from app.db.models import ResearcherProfile, ResearcherProfileDetails, User
 from app.repositories import profiles as profile_repository
 from app.schemas.profile_details import ResearcherProfileDetailsUpsert
-from app.services.embeddings import persist_profile_embedding_vector
 from app.schemas.profiles import ResearcherProfileCreate
 from app.services.serialization import pack_list
+
+logger = logging.getLogger(__name__)
 
 
 def create_profile(
@@ -29,6 +31,9 @@ def create_profile(
     db.add(profile)
     db.commit()
     db.refresh(profile)
+    db.add(ResearcherProfileDetails(profile_id=profile.id))
+    db.commit()
+    logger.info("created profile embedding cache row profile_id=%s", profile.id)
     return profile
 
 
@@ -49,6 +54,12 @@ def update_profile(
     profile.linkedin_url = str(payload.linkedin_url) if payload.linkedin_url else None
     db.commit()
     db.refresh(profile)
+    details = profile_repository.get_profile_details(db, profile.id)
+    if details is not None:
+        details.profile_embedding = ""
+        details.embedding_model = ""
+        db.commit()
+        logger.info("invalidated profile embedding cache profile_id=%s reason=profile_update", profile.id)
     return profile
 
 
@@ -67,11 +78,9 @@ def upsert_profile_details(
     details.preferred_opportunity_types = pack_list([item.value for item in payload.preferred_opportunity_types])
     details.min_duration_months = payload.min_duration_months
     details.max_duration_months = payload.max_duration_months
+    details.profile_embedding = ""
+    details.embedding_model = ""
     db.commit()
     db.refresh(details)
-    profile = db.get(ResearcherProfile, profile_id)
-    if profile is not None:
-        persist_profile_embedding_vector(db, profile, details)
-        db.commit()
-        db.refresh(details)
+    logger.info("invalidated profile embedding cache profile_id=%s reason=details_update", profile_id)
     return details

@@ -28,6 +28,7 @@ type Filters = {
 };
 
 type GrantsForm = { keyword: string; limit: number; import_results: boolean };
+type EUFundingForm = { keyword: string; source_name: string; programme: string; limit: number; import_results: boolean };
 type ImportForm = { source: string; dry_run: boolean; payload: string };
 type JobForm = { job_id: string; queue_name: string };
 type OrcidForm = {
@@ -82,7 +83,6 @@ export type WorkspaceController = {
   onSelectOpportunity: (opportunity: Opportunity) => void;
   onStatus: (opportunityId: number, status: OpportunityStatus) => void;
   onFiltersChange: (filters: Filters) => void;
-  onApplyFilters: () => void;
   onResetFilters: () => void;
   onMatchesPageChange: (page: number) => void;
   onReminderFormChange: (form: { opportunity_id: string; remind_on: string; message: string }) => void;
@@ -129,6 +129,7 @@ export type AssistantController = {
 export type AdminController = {
   importForm: ImportForm;
   grantsForm: GrantsForm;
+  euFundingForm: EUFundingForm;
   externalForm: ExternalForm;
   jobForm: JobForm;
   queueStats: QueueStats[];
@@ -139,10 +140,12 @@ export type AdminController = {
   adminBusy: string | null;
   onImportFormChange: (form: ImportForm) => void;
   onGrantsFormChange: (form: GrantsForm) => void;
+  onEuFundingFormChange: (form: EUFundingForm) => void;
   onExternalFormChange: (form: ExternalForm) => void;
   onJobFormChange: (form: JobForm) => void;
   onEnqueueGrantsGov: (event: FormEvent) => void;
   onRunGrantsGovNow: (event: FormEvent) => void;
+  onRunEuFundingTenders: (event: FormEvent) => void;
   onRunBulkImport: (event: FormEvent) => void;
   onRunExternalImport: (event: FormEvent) => void;
   onLoadQueues: () => void;

@@ -5,8 +5,8 @@ from typing import Any
 from urllib.parse import urljoin, urlparse
 from xml.etree import ElementTree
 
-import httpx
 from app.db.models import OpportunityType
+from app.services.external_fetch import ExternalSourceClient, validate_external_source_url
 from app.modules.opportunities.mappers import to_opportunity_preview
 from app.schemas.ingestion import ExternalSourceImportRequest, ExternalSourceImportResult
 from app.schemas.opportunities import OpportunityCreate
@@ -14,19 +14,10 @@ from app.integrations.source_connectors import get_source_connector
 from app.services.ingestion_audit import ensure_source, finish_batch, start_batch
 from app.services.opportunity_import import import_opportunities
 from app.services.opportunity_search import index_opportunity_for_search
+from app.services.source_quality import is_generic_provider_reference
 
 
 logger = logging.getLogger(__name__)
-
-
-class ExternalSourceClient:
-    def __init__(self, http_client: httpx.Client | None = None) -> None:
-        self.http_client = http_client or httpx.Client(timeout=20, follow_redirects=True)
-
-    def fetch(self, url: str) -> str:
-        response = self.http_client.get(url)
-        response.raise_for_status()
-        return response.text
 
 
 def import_external_source(payload: ExternalSourceImportRequest, db, client: ExternalSourceClient | None = None) -> ExternalSourceImportResult:
@@ -83,10 +74,18 @@ def import_external_source(payload: ExternalSourceImportRequest, db, client: Ext
 
 def normalize_external_source(raw: str, payload: ExternalSourceImportRequest) -> list[OpportunityCreate]:
     if payload.source_kind == "json":
-        return [_payload_from_mapping(item, payload) for item in _json_items(raw)[: payload.limit]]
-    if payload.source_kind == "html":
-        return [_payload_from_mapping(item, payload) for item in _html_items(raw, str(payload.source_url))[: payload.limit]]
-    return [_payload_from_mapping(item, payload) for item in _rss_items(raw)[: payload.limit]]
+        items = _json_items(raw)
+    elif payload.source_kind == "html":
+        items = _html_items(raw, str(payload.source_url))
+    else:
+        items = _rss_items(raw)
+    return [_payload_from_mapping(item, payload) for item in items if not _is_generic_provider_page(item, payload)][: payload.limit]
+
+
+def _is_generic_provider_page(item: dict[str, Any], payload: ExternalSourceImportRequest) -> bool:
+    url = str(item.get("url") or item.get("link") or item.get("href") or "").casefold()
+    title = str(item.get("title") or item.get("name") or "").casefold()
+    return is_generic_provider_reference(payload.source_name, title, url)
 
 
 def _json_items(raw: str) -> list[dict[str, Any]]:

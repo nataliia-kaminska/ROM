@@ -1,7 +1,8 @@
 from datetime import date, timedelta
 
 from app.core.config import settings
-from app.services.requirements import extract_requirements_text
+from app.db.models import Opportunity, OpportunityType
+from app.services.requirements import extract_requirements_text, refresh_opportunity_requirements
 
 
 def test_requirement_parser_extracts_structured_signals():
@@ -95,6 +96,64 @@ def test_ai_requirement_extraction_enriches_database_metadata(client, monkeypatc
     assert "postdoc" in body["career_stages"]
     assert body["extracted_requirements"]["required_degree"] == "phd"
     assert body["requirements_confidence"] == 88
+
+
+def test_ai_extraction_can_polish_public_card_fields(monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": """
+                            {
+                              "title": "MSCA Postdoctoral Fellowships 2026",
+                              "summary": "A European fellowship call for postdoctoral researchers to develop an international research project with a host institution.",
+                              "eligibility": "Applicants should hold a doctoral degree and comply with MSCA mobility rules.",
+                              "disciplines": ["Research"],
+                              "keywords": ["postdoctoral fellowship", "mobility"],
+                              "countries": ["European Union"],
+                              "career_stages": ["postdoc"],
+                              "required_degree": "phd",
+                              "languages": ["English"],
+                              "publication_expectation": "",
+                              "mobility": "MSCA mobility rules apply.",
+                              "citizenship": "",
+                              "years_since_phd": null,
+                              "snippets": ["Applicants should hold a doctoral degree."],
+                              "confidence": 84
+                            }
+                            """
+                        }
+                    }
+                ]
+            }
+
+    opportunity = Opportunity(
+        title="Apply now",
+        opportunity_type=OpportunityType.fellowship,
+        source="eu_funding_tenders",
+        url="https://ec.europa.eu/info/funding-tenders/opportunities/example",
+        summary="See call page.",
+        eligibility="See call page.",
+        disciplines="",
+        keywords="",
+        countries="",
+        career_stages="",
+    )
+    monkeypatch.setattr(settings, "opportunity_extraction_provider", "groq")
+    monkeypatch.setattr(settings, "groq_api_key", "test-key")
+    monkeypatch.setattr("app.services.requirements.httpx.post", lambda *args, **kwargs: FakeResponse())
+
+    refresh_opportunity_requirements(opportunity, page_preview="MSCA Postdoctoral Fellowships 2026. Applicants should hold a doctoral degree.")
+
+    assert opportunity.title == "MSCA Postdoctoral Fellowships 2026"
+    assert "European fellowship call" in opportunity.summary
+    assert "doctoral degree" in opportunity.eligibility
+    assert opportunity.requirements_confidence == 84
 
 
 def test_recommendations_use_extracted_requirements_when_metadata_is_sparse(client):

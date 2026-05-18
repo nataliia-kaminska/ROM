@@ -27,6 +27,99 @@ def test_register_login_and_me(client):
     assert me_response.json()["email"] == "ada@example.com"
 
 
+def test_refresh_token_cookie_rotates_and_logout_revokes(client):
+    registered = _register(client, "refresh@example.com")
+    assert registered["access_token"]
+
+    refresh_response = client.post("/auth/refresh")
+    assert refresh_response.status_code == 200
+    refreshed = refresh_response.json()
+    assert refreshed["access_token"]
+    assert refreshed["user"]["email"] == "refresh@example.com"
+    assert refreshed["access_token"] != registered["access_token"]
+
+    logout_response = client.post("/auth/logout", headers={"Authorization": f"Bearer {refreshed['access_token']}"})
+    assert logout_response.status_code == 204
+
+    denied_refresh = client.post("/auth/refresh")
+    assert denied_refresh.status_code == 401
+
+
+def test_auth_rate_limit_blocks_repeated_attempts(client):
+    from app.core.config import settings
+    from app.core.rate_limit import reset_rate_limits
+
+    _register(client, "limited@example.com")
+    original_enabled = settings.auth_rate_limit_enabled
+    original_max = settings.auth_rate_limit_max_requests
+    original_window = settings.auth_rate_limit_window_seconds
+    settings.auth_rate_limit_enabled = True
+    settings.auth_rate_limit_max_requests = 2
+    settings.auth_rate_limit_window_seconds = 60
+    reset_rate_limits()
+    try:
+        payload = {"email": "limited@example.com", "password": "wrong-password"}
+        assert client.post("/auth/login", json=payload).status_code == 401
+        assert client.post("/auth/login", json=payload).status_code == 401
+        limited = client.post("/auth/login", json=payload)
+        assert limited.status_code == 429
+        assert limited.json()["error"]["code"] == "http_error"
+    finally:
+        settings.auth_rate_limit_enabled = original_enabled
+        settings.auth_rate_limit_max_requests = original_max
+        settings.auth_rate_limit_window_seconds = original_window
+        reset_rate_limits()
+
+
+def test_orcid_start_requires_configuration(client):
+    response = client.get("/auth/orcid/start")
+
+    assert response.status_code == 503
+
+
+def test_auth_providers_report_orcid_availability(client):
+    response = client.get("/auth/providers")
+
+    assert response.status_code == 200
+    assert response.json()["orcid_oauth_enabled"] is False
+
+
+def test_orcid_callback_creates_passwordless_user(client, monkeypatch):
+    from app.api import auth as auth_api
+    from app.core.config import settings
+    from app.services.orcid_oauth import create_orcid_state
+
+    original_frontend_base_url = settings.frontend_base_url
+    settings.frontend_base_url = "http://frontend.test"
+
+    def fake_exchange_authorization_code(code: str):
+        assert code == "auth-code"
+        return {"orcid": "0000-0002-1825-0097", "name": "Ada Lovelace"}
+
+    monkeypatch.setattr(auth_api, "exchange_authorization_code", fake_exchange_authorization_code)
+    try:
+        response = client.get(
+            "/auth/orcid/callback",
+            params={"code": "auth-code", "state": create_orcid_state()},
+            follow_redirects=False,
+        )
+    finally:
+        settings.frontend_base_url = original_frontend_base_url
+
+    assert response.status_code == 302
+    assert response.headers["location"].startswith("http://frontend.test/orcid-callback?token=")
+
+    token = response.headers["location"].split("token=", 1)[1]
+    me_response = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
+
+    assert me_response.status_code == 200
+    user = me_response.json()
+    assert user["auth_provider"] == "orcid"
+    assert user["orcid_id"] == "0000-0002-1825-0097"
+    assert user["password_login_enabled"] is False
+    assert user["email_verified"] is True
+
+
 def test_authenticated_profile_is_owned_and_visible_in_my_profiles(client):
     auth = _register(client, "owner@example.com")
     headers = {"Authorization": f"Bearer {auth['access_token']}"}

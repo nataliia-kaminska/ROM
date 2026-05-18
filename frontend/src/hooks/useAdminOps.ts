@@ -1,27 +1,32 @@
 import { type FormEvent, useState } from "react";
 import { api, type OpportunityPayload } from "../api";
 import { blankOpportunity } from "../constants";
-import type { OpportunityType, Profile } from "../types";
+import type { OpportunityType } from "../types";
 import { normalizeText } from "../utils/format";
 
 export function useAdminOps({
   token,
-  activeProfile,
   setError,
   setNotice,
-  refreshWorkspace,
+  refreshCatalogOptions,
 }: {
   token: string | null;
-  activeProfile: Profile | null;
   setError: (message: string) => void;
   setNotice: (message: string) => void;
-  refreshWorkspace: (profile?: Profile | null) => Promise<void>;
+  refreshCatalogOptions?: () => Promise<void>;
 }) {
   const [adminData, setAdminData] = useState<Record<string, unknown> | null>(null);
   const [auditLog, setAuditLog] = useState<Record<string, unknown>[]>([]);
   const [duplicateGroups, setDuplicateGroups] = useState<Record<string, unknown>[]>([]);
   const [importForm, setImportForm] = useState({ source: "curated", dry_run: true, payload: JSON.stringify([blankOpportunity], null, 2) });
   const [grantsForm, setGrantsForm] = useState({ keyword: "", limit: 10, import_results: true });
+  const [euFundingForm, setEuFundingForm] = useState({
+    keyword: "research",
+    source_name: "horizon_europe",
+    programme: "Horizon Europe",
+    limit: 10,
+    import_results: true,
+  });
   const [externalForm, setExternalForm] = useState({
     source_name: "nrfu",
     source_url: "",
@@ -58,6 +63,7 @@ export function useAdminOps({
 
   async function runBulkImport(event: FormEvent) {
     event.preventDefault();
+    if (!token) return;
     setError("");
     setAdminBusy("curated");
     try {
@@ -65,11 +71,13 @@ export function useAdminOps({
       if (!Array.isArray(opportunities) || opportunities.length === 0) {
         throw new Error("Curated import JSON must be a non-empty opportunity array.");
       }
-      const result = await api.bulkImport({ source: importForm.source, dry_run: importForm.dry_run, opportunities });
+      const result = await api.bulkImport(token, { source: importForm.source, dry_run: importForm.dry_run, opportunities });
       setNotice(
         `${result.dry_run ? "Validated" : "Imported"} ${result.imported_count} new, ${result.updated_count} updated, ${result.skipped_count} skipped`,
       );
-      await refreshWorkspace(activeProfile);
+      if (!result.dry_run) {
+        await refreshCatalogOptions?.();
+      }
     } catch (importError) {
       setError((importError as Error).message);
     } finally {
@@ -79,6 +87,7 @@ export function useAdminOps({
 
   async function runExternalImport(event: FormEvent) {
     event.preventDefault();
+    if (!token) return;
     if (!externalForm.source_name || !externalForm.source_url) {
       setError("Source name and feed URL are required.");
       return;
@@ -86,7 +95,7 @@ export function useAdminOps({
     setError("");
     setAdminBusy("external");
     try {
-      const result = await api.externalSourceImport({
+      const result = await api.externalSourceImport(token, {
         ...externalForm,
         default_country: normalizeText(externalForm.default_country),
         default_career_stage: normalizeText(externalForm.default_career_stage),
@@ -94,7 +103,7 @@ export function useAdminOps({
         keyword: normalizeText(externalForm.keyword),
       });
       setNotice(`${result.source}: ${result.imported_count} imported, ${result.updated_count} updated, ${result.skipped_count} skipped`);
-      await refreshWorkspace(activeProfile);
+      await refreshCatalogOptions?.();
     } catch (importError) {
       setError((importError as Error).message);
     } finally {
@@ -104,12 +113,32 @@ export function useAdminOps({
 
   async function runGrantsGov(event: FormEvent) {
     event.preventDefault();
+    if (!token) return;
     setError("");
     setAdminBusy("grants-now");
     try {
-      const result = await api.grantsGov(grantsForm);
+      const result = await api.grantsGov(token, grantsForm);
       setNotice(`${result.source}: ${result.imported_count} imported, ${result.skipped_count} skipped`);
-      await refreshWorkspace(activeProfile);
+      await refreshCatalogOptions?.();
+    } catch (importError) {
+      setError((importError as Error).message);
+    } finally {
+      setAdminBusy(null);
+    }
+  }
+
+  async function runEuFundingTenders(event: FormEvent) {
+    event.preventDefault();
+    if (!token) return;
+    setError("");
+    setAdminBusy("eu-funding");
+    try {
+      const result = await api.euFundingTenders(token, {
+        ...euFundingForm,
+        programme: normalizeText(euFundingForm.programme),
+      });
+      setNotice(`${result.source}: ${result.imported_count} imported, ${result.skipped_count} skipped`);
+      await refreshCatalogOptions?.();
     } catch (importError) {
       setError((importError as Error).message);
     } finally {
@@ -230,6 +259,7 @@ export function useAdminOps({
   return {
     importForm,
     grantsForm,
+    euFundingForm,
     externalForm,
     jobForm,
     queueStats,
@@ -240,10 +270,12 @@ export function useAdminOps({
     adminBusy,
     setImportForm,
     setGrantsForm,
+    setEuFundingForm,
     setExternalForm,
     setJobForm,
     enqueueGrantsGov,
     runGrantsGov,
+    runEuFundingTenders,
     runBulkImport,
     runExternalImport,
     loadQueues,

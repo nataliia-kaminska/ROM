@@ -39,6 +39,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 
   const response = await fetch(url, {
     method: options.method ?? "GET",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
@@ -57,5 +58,8 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     throw new Error(message);
   }
 
+  if (response.status === 204) {
+    return undefined as T;
+  }
   return response.json() as Promise<T>;
 }

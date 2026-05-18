@@ -25,6 +25,7 @@ export function viewLabel(value: View): string {
     assistant: "Apply Assistant",
     about: "How It Works",
     verify_email: "Verify Email",
+    orcid_callback: "ORCID Sign In",
     reminders: "Application Reminders",
     notifications: "Notification Center",
     admin: "Admin",

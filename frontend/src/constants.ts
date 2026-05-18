@@ -7,7 +7,7 @@ export const trackedStatuses: OpportunityStatus[] = ["saved", "planned", "applie
 export const reminderStatuses: OpportunityStatus[] = ["saved", "planned"];
 export const researcherViews = ["about", "dashboard", "feed", "profile", "board", "assistant", "reminders", "notifications"] as const;
 
-export type View = "dashboard" | "feed" | "profile" | "board" | "reminders" | "notifications" | "assistant" | "about" | "verify_email" | "admin";
+export type View = "dashboard" | "feed" | "profile" | "board" | "reminders" | "notifications" | "assistant" | "about" | "verify_email" | "orcid_callback" | "admin";
 export type DetailTab = "overview" | "reasons" | "eligibility" | "assistant" | "reminders";
 
 export const viewRoutes: Record<View, string> = {
@@ -18,6 +18,7 @@ export const viewRoutes: Record<View, string> = {
   assistant: "/assistant",
   about: "/about",
   verify_email: "/verify-email",
+  orcid_callback: "/orcid-callback",
   reminders: "/reminders",
   notifications: "/notifications",
   admin: "/admin",

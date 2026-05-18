@@ -10,6 +10,7 @@ import { useSession } from "./hooks/useSession";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { useWorkspaceSelectors } from "./hooks/useWorkspaceSelectors";
 import { WorkspaceRoutes } from "./routes/WorkspaceRoutes";
+import { OrcidCallbackView } from "./views/OrcidCallbackView";
 import { VerifyEmailView } from "./views/VerifyEmailView";
 
 function App() {
@@ -55,10 +56,9 @@ function App() {
 
   const admin = useAdminOps({
     token,
-    activeProfile,
     setError,
     setNotice,
-    refreshWorkspace: workspace.refreshWorkspace,
+    refreshCatalogOptions: () => workspace.loadFilterOptions(true),
   });
 
   const profile = useProfileForms({
@@ -114,10 +114,11 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (token || guestMode) {
+    const workspaceViews = new Set(["dashboard", "feed", "board", "assistant", "reminders"]);
+    if ((token || guestMode) && workspaceViews.has(view)) {
       void workspace.refreshWorkspace(activeProfile, workspace.filters, 1);
     }
-  }, [token, guestMode, activeProfileId]);
+  }, [token, guestMode, activeProfileId, view]);
 
   useEffect(() => {
     const guestViews = new Set(["about", "feed"]);
@@ -151,6 +152,9 @@ function App() {
   }
 
   if ((!token || !user) && !guestMode) {
+    if (view === "orcid_callback") {
+      return <OrcidCallbackView onViewChange={navigateTo} />;
+    }
     if (view === "verify_email") {
       return <VerifyEmailView onViewChange={navigateTo} />;
     }
@@ -202,15 +206,14 @@ function App() {
           nextReminder,
           opportunitiesById,
           reminderEligibleOpportunities,
-          sourceOptions,
-          countryOptions,
-          disciplineOptions,
-          keywordOptions,
+          sourceOptions: workspace.filterOptions.sources.length ? workspace.filterOptions.sources : sourceOptions,
+          countryOptions: workspace.filterOptions.countries.length ? workspace.filterOptions.countries : countryOptions,
+          disciplineOptions: workspace.filterOptions.disciplines.length ? workspace.filterOptions.disciplines : disciplineOptions,
+          keywordOptions: workspace.filterOptions.keywords.length ? workspace.filterOptions.keywords : keywordOptions,
           onProfileFocus: setProfileHighlights,
           onSelectOpportunity: workspace.setSelectedOpportunity,
           onStatus: (opportunityId, status) => void workspace.updateStatus(opportunityId, status),
           onFiltersChange: workspace.setFilters,
-          onApplyFilters: workspace.applyFilters,
           onResetFilters: workspace.resetFilters,
           onMatchesPageChange: workspace.goToMatchesPage,
           onReminderFormChange: workspace.setReminderForm,
@@ -253,6 +256,7 @@ function App() {
         admin={{
           importForm: admin.importForm,
           grantsForm: admin.grantsForm,
+          euFundingForm: admin.euFundingForm,
           externalForm: admin.externalForm,
           jobForm: admin.jobForm,
           queueStats: admin.queueStats,
@@ -263,10 +267,12 @@ function App() {
           adminBusy: admin.adminBusy,
           onImportFormChange: admin.setImportForm,
           onGrantsFormChange: admin.setGrantsForm,
+          onEuFundingFormChange: admin.setEuFundingForm,
           onExternalFormChange: admin.setExternalForm,
           onJobFormChange: admin.setJobForm,
           onEnqueueGrantsGov: admin.enqueueGrantsGov,
           onRunGrantsGovNow: (event) => void admin.runGrantsGov(event),
+          onRunEuFundingTenders: (event) => void admin.runEuFundingTenders(event),
           onRunBulkImport: admin.runBulkImport,
           onRunExternalImport: admin.runExternalImport,
           onLoadQueues: () => void admin.loadQueues(),

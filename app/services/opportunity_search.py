@@ -78,11 +78,12 @@ def _has_multiple_values(value: str | None) -> bool:
 
 
 def index_opportunity_for_search(opportunity: Opportunity) -> None:
-    if not settings.elasticsearch_enabled or opportunity.id is None:
+    if not settings.elasticsearch_enabled or not settings.elasticsearch_index_on_import or opportunity.id is None:
         logger.debug(
-            "skip elasticsearch indexing opportunity_id=%s enabled=%s",
+            "skip elasticsearch indexing opportunity_id=%s enabled=%s index_on_import=%s",
             opportunity.id,
             settings.elasticsearch_enabled,
+            settings.elasticsearch_index_on_import,
         )
         return
     try:

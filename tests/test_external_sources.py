@@ -1,8 +1,27 @@
 import httpx
 
+from app.db.models import User, UserRole
+from app.core.exceptions import BadRequestError
 from app.schemas.ingestion import ExternalSourceImportRequest
-from app.services.external_sources import ExternalSourceClient, normalize_external_source
+from app.services.external_sources import ExternalSourceClient, normalize_external_source, validate_external_source_url
 from app.services.source_connectors import get_source_connector
+
+
+def _admin_headers(client) -> dict[str, str]:
+    client.post(
+        "/auth/register",
+        json={"email": "source-admin@example.com", "password": "strong-password-123", "full_name": "Source Admin"},
+    )
+    SessionLocal = client.app.state.testing_session_factory
+    with SessionLocal() as db:
+        user = db.query(User).filter(User.email == "source-admin@example.com").first()
+        user.role = UserRole.admin
+        db.commit()
+    login = client.post(
+        "/auth/login",
+        json={"email": "source-admin@example.com", "password": "strong-password-123"},
+    ).json()
+    return {"Authorization": f"Bearer {login['access_token']}"}
 
 
 def test_normalize_external_rss_source_to_opportunities():
@@ -82,7 +101,42 @@ def test_normalize_external_html_source_rejects_generic_listing_pages():
     assert str(opportunities[0].url) == "https://nrfu.org.ua/en/news/open-call-2026-research-mobility"
 
 
+def test_european_html_import_rejects_generic_provider_pages():
+    erasmus_raw = """
+    <main>
+      <a href="/opportunities/opportunities-for-individuals/applying-by-yourself">Applying by yourself</a>
+      <a href="/opportunities/individuals/trainees/students/search-the-erasmus-mundus-catalogue">search the Erasmus Mundus catalogue</a>
+      <a href="/news/future-skills-start-here-2026-erasmus-funding-call-is-open">Future skills start here - 2026 Erasmus+ funding call is open</a>
+    </main>
+    """
+    horizon_raw = """
+    <main>
+      <a href="/info/funding-tenders/opportunities/portal/screen/opportunities/calls-for-proposals">Calls for proposals</a>
+    </main>
+    """
+    erasmus_payload = ExternalSourceImportRequest(
+        source_name="erasmus",
+        source_url="https://erasmus-plus.ec.europa.eu/opportunities/opportunities-for-individuals",
+        source_kind="html",
+        default_opportunity_type="exchange",
+    )
+    horizon_payload = ExternalSourceImportRequest(
+        source_name="horizon_europe",
+        source_url="https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/calls-for-proposals",
+        source_kind="html",
+        default_opportunity_type="grant",
+    )
+
+    erasmus_opportunities = normalize_external_source(erasmus_raw, erasmus_payload)
+    horizon_opportunities = normalize_external_source(horizon_raw, horizon_payload)
+
+    assert [opportunity.title for opportunity in erasmus_opportunities] == ["Future skills start here - 2026 Erasmus+ funding call is open"]
+    assert horizon_opportunities == []
+
+
 def test_external_source_import_records_batch(client, monkeypatch):
+    headers = _admin_headers(client)
+
     class FakeExternalSourceClient:
         def fetch(self, url: str) -> str:
             assert url == "https://example.org/euraxess.json"
@@ -105,6 +159,7 @@ def test_external_source_import_records_batch(client, monkeypatch):
 
     response = client.post(
         "/ingestion/external-source/import",
+        headers=headers,
         json={
             "source_name": "euraxess",
             "source_url": "https://example.org/euraxess.json",
@@ -123,6 +178,36 @@ def test_external_source_import_records_batch(client, monkeypatch):
     sources_response = client.get("/sources")
     assert sources_response.status_code == 200
     assert sources_response.json()[0]["name"] == "euraxess"
+
+
+def test_external_source_import_requires_admin(client):
+    response = client.post(
+        "/ingestion/external-source/import",
+        json={
+            "source_name": "euraxess",
+            "source_url": "https://example.org/euraxess.json",
+            "source_kind": "json",
+        },
+    )
+
+    assert response.status_code == 401
+
+
+def test_external_source_url_blocks_private_networks():
+    blocked_urls = [
+        "http://127.0.0.1/feed.xml",
+        "http://localhost/feed.xml",
+        "http://10.0.0.5/feed.xml",
+        "http://user:password@example.org/feed.xml",
+    ]
+
+    for url in blocked_urls:
+        try:
+            validate_external_source_url(url)
+        except BadRequestError as exc:
+            assert "External source" in str(exc)
+        else:
+            raise AssertionError(f"Expected URL to be blocked: {url}")
 
 
 def test_source_specific_connectors_normalize_fixture_payloads():
@@ -187,6 +272,30 @@ def test_source_specific_connectors_normalize_fixture_payloads():
             "deadlineDate": "2026-11-01",
         }
     )
+    horizon = get_source_connector("horizon_europe").normalize(
+        {
+            "title": "Horizon Europe climate research call",
+            "url": "https://example.org/horizon/climate",
+            "topicDescription": "Collaborative research and innovation action.",
+            "deadlineDate": "2026-12-10",
+            "destination": "Climate, Energy and Mobility",
+        }
+    )
+    erasmus = get_source_connector("erasmus").normalize(
+        {
+            "title": "Erasmus+ mobility for doctoral researchers",
+            "url": "https://example.org/erasmus/mobility",
+            "description": "Mobility exchange for doctoral candidates and university staff.",
+        }
+    )
+    nawa = get_source_connector("nawa").normalize(
+        {
+            "title": "Banach NAWA Programme 2026",
+            "url": "https://example.org/nawa/banach",
+            "programmeDescription": "Scholarship programme for second-cycle studies in Poland.",
+            "applicationDeadline": "2026-06-25",
+        }
+    )
 
     assert euraxess.opportunity_type.value == "research_position"
     assert euraxess.url == "https://example.org/euraxess/apply"
@@ -207,3 +316,13 @@ def test_source_specific_connectors_normalize_fixture_payloads():
     assert "postdoc" in science_for_ukraine.career_stages
     assert msca4ukraine.countries == ["Ukraine", "European Union"]
     assert "msca4ukraine" in msca4ukraine.keywords
+    assert horizon.countries == ["European Union"]
+    assert horizon.opportunity_type.value == "grant"
+    assert "horizon europe" in horizon.keywords
+    assert horizon.deadline == "2026-12-10"
+    assert erasmus.countries == ["European Union"]
+    assert erasmus.opportunity_type.value == "exchange"
+    assert "phd" in erasmus.career_stages
+    assert nawa.countries == ["Poland"]
+    assert nawa.deadline == "2026-06-25"
+    assert "nawa" in nawa.keywords

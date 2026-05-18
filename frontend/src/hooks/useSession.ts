@@ -6,7 +6,7 @@ type AuthMode = "login" | "register";
 type AuthForm = { email: string; password: string; confirm_password: string; full_name: string };
 
 export function useSession({ onLogout }: { onLogout?: () => void } = {}) {
-  const [token, setToken] = useState(() => localStorage.getItem("rom_token"));
+  const [token, setToken] = useState(() => sessionStorage.getItem("rom_access_token") ?? localStorage.getItem("rom_token"));
   const [user, setUser] = useState<User | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [authForm, setAuthForm] = useState<AuthForm>({ email: "", password: "", confirm_password: "", full_name: "" });
@@ -17,12 +17,30 @@ export function useSession({ onLogout }: { onLogout?: () => void } = {}) {
   const [error, setError] = useState("");
 
   async function loadSession(nextToken = token, preferredProfileId = activeProfileId) {
-    if (!nextToken) return;
     setLoading(true);
     setError("");
     try {
-      const [me, ownedProfiles] = await Promise.all([api.me(nextToken), api.profiles(nextToken)]);
-      const availableProfiles = ownedProfiles.length > 0 ? ownedProfiles : [await createStarterProfile(nextToken, me)];
+      let effectiveToken = nextToken;
+      if (!effectiveToken) {
+        try {
+          effectiveToken = (await api.refresh()).access_token;
+        } catch {
+          return;
+        }
+      }
+      persistAccessToken(effectiveToken);
+      let me: User;
+      let ownedProfiles: Profile[];
+      try {
+        [me, ownedProfiles] = await Promise.all([api.me(effectiveToken), api.profiles(effectiveToken)]);
+      } catch {
+        const refreshed = await api.refresh();
+        effectiveToken = refreshed.access_token;
+        persistAccessToken(effectiveToken);
+        [me, ownedProfiles] = await Promise.all([api.me(effectiveToken), api.profiles(effectiveToken)]);
+      }
+      const availableProfiles = ownedProfiles.length > 0 ? ownedProfiles : [await createStarterProfile(effectiveToken, me)];
+      setToken(effectiveToken);
       setUser(me);
       setProfiles(availableProfiles);
       const chosen = availableProfiles.find((profile) => profile.id === preferredProfileId) ?? availableProfiles[0] ?? null;
@@ -38,7 +56,7 @@ export function useSession({ onLogout }: { onLogout?: () => void } = {}) {
   async function createStarterProfile(nextToken: string, me: User) {
     return api.createProfile(nextToken, {
       full_name: me.full_name || me.email,
-      email: me.email,
+      email: me.auth_provider === "orcid" ? null : me.email,
       career_stage: "phd",
       country: null,
       disciplines: [],
@@ -78,7 +96,7 @@ export function useSession({ onLogout }: { onLogout?: () => void } = {}) {
         return;
       }
       const response = await api.login({ email: authForm.email, password: authForm.password });
-      localStorage.setItem("rom_token", response.access_token);
+      persistAccessToken(response.access_token);
       setToken(response.access_token);
       setUser(response.user);
       await loadSession(response.access_token);
@@ -90,6 +108,8 @@ export function useSession({ onLogout }: { onLogout?: () => void } = {}) {
   }
 
   function logout() {
+    if (token) void api.logout(token).catch(() => undefined);
+    sessionStorage.removeItem("rom_access_token");
     localStorage.removeItem("rom_token");
     setToken(null);
     setUser(null);
@@ -118,6 +138,11 @@ export function useSession({ onLogout }: { onLogout?: () => void } = {}) {
     submitAuth,
     logout,
   };
+}
+
+function persistAccessToken(value: string) {
+  sessionStorage.setItem("rom_access_token", value);
+  localStorage.removeItem("rom_token");
 }
 
 function validateFullName(value: string): string {

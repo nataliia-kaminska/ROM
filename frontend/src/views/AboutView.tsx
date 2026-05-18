@@ -29,8 +29,8 @@ export function AboutView({ isSignedIn, onViewChange }: { isSignedIn: boolean; o
           <span>1</span>
           <h3>Opportunities are collected</h3>
           <p>
-            Sources can include curated data, Grants.gov, EURAXESS, DAAD, Fulbright, MSCA-related feeds, Ukrainian sources, RSS, JSON,
-            and HTML pages. Admin tools import and normalize these records into one catalog.
+            Sources can include curated data, Grants.gov, Horizon Europe, Erasmus+, NAWA, EURAXESS, DAAD, Fulbright, MSCA-related feeds,
+            Ukrainian sources, RSS, JSON, and HTML pages. Admin tools import and normalize these records into one catalog.
           </p>
         </article>
         <article>

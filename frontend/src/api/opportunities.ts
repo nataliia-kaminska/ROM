@@ -1,12 +1,24 @@
-import type { Opportunity, OpportunityStatus, OpportunityType, Recommendation, StatusRecord } from "../types";
+import type { Opportunity, OpportunityFilterOptions, OpportunityStatus, OpportunityType, Recommendation, StatusRecord } from "../types";
 import type { OpportunityPayload } from "./payloads";
 import { request } from "./client";
 
 export const opportunitiesApi = {
   opportunities: (query: Record<string, string | number | boolean | null | undefined>) =>
     request<Opportunity[]>("/opportunities", { query }),
+  opportunityOptions: () => request<OpportunityFilterOptions>("/opportunities/options"),
   opportunity: (id: number) => request<Opportunity>(`/opportunities/${id}`),
-  recommendations: (token: string, profileId: number, query: { min_score: number; include_ignored: boolean; limit: number; offset: number }) =>
+  recommendations: (token: string, profileId: number, query: {
+    min_score: number;
+    include_ignored: boolean;
+    keyword?: string;
+    opportunity_type?: string;
+    country?: string;
+    career_stage?: string;
+    source?: string;
+    active_only?: boolean;
+    limit: number;
+    offset: number;
+  }) =>
     request<Recommendation[]>(`/recommendations/${profileId}`, { token, query }),
   setStatus: (token: string, profileId: number, opportunityId: number, status: OpportunityStatus, notes = "") =>
     request<StatusRecord>(`/profiles/${profileId}/opportunities/${opportunityId}/status`, {
@@ -16,12 +28,12 @@ export const opportunitiesApi = {
     }),
   statuses: (token: string, profileId: number) =>
     request<StatusRecord[]>(`/profiles/${profileId}/opportunities/statuses`, { token }),
-  bulkImport: (body: { source: string; dry_run: boolean; opportunities: OpportunityPayload[] }) =>
+  bulkImport: (token: string, body: { source: string; dry_run: boolean; opportunities: OpportunityPayload[] }) =>
     request<{ imported_count: number; updated_count: number; skipped_count: number; dry_run: boolean; opportunities: Opportunity[] }>(
       "/opportunities/bulk-import",
-      { method: "POST", body },
+      { token, method: "POST", body },
     ),
-  externalSourceImport: (body: {
+  externalSourceImport: (token: string, body: {
     source_name: string;
     source_url: string;
     source_kind: "rss" | "json" | "html";
@@ -40,10 +52,15 @@ export const opportunitiesApi = {
       updated_count: number;
       skipped_count: number;
       opportunities: Opportunity[];
-    }>("/ingestion/external-source/import", { method: "POST", body }),
-  grantsGov: (body: { keyword: string; limit: number; import_results: boolean }) =>
+    }>("/ingestion/external-source/import", { token, method: "POST", body }),
+  grantsGov: (token: string, body: { keyword: string; limit: number; import_results: boolean }) =>
     request<{ source: string; batch_id: number; imported_count: number; skipped_count: number; opportunities: Opportunity[] }>(
       "/ingestion/grants-gov/search",
-      { method: "POST", body },
+      { token, method: "POST", body },
+    ),
+  euFundingTenders: (token: string, body: { keyword: string; source_name: string; programme: string | null; limit: number; import_results: boolean }) =>
+    request<{ source: string; batch_id: number; imported_count: number; skipped_count: number; opportunities: Opportunity[] }>(
+      "/ingestion/eu-funding-tenders/search",
+      { token, method: "POST", body },
     ),
 };

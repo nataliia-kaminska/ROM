@@ -33,6 +33,50 @@ def test_admin_endpoints_require_admin_role(client):
     assert allowed.status_code == 200
 
 
+def test_opportunity_write_endpoints_require_admin_role(client):
+    researcher_headers = _auth_headers(client, "writer-researcher@example.com")
+    admin_headers = _auth_headers(client, "writer-admin@example.com", UserRole.admin)
+    payload = {
+        "title": "Protected Grant",
+        "opportunity_type": "grant",
+        "source": "manual",
+        "url": "https://example.org/protected-grant",
+    }
+
+    anonymous = client.post("/opportunities", json=payload)
+    denied = client.post("/opportunities", headers=researcher_headers, json=payload)
+    allowed = client.post("/opportunities", headers=admin_headers, json=payload)
+
+    assert anonymous.status_code == 401
+    assert denied.status_code == 403
+    assert allowed.status_code == 201
+
+
+def test_opportunity_filter_options_are_catalog_wide(client):
+    admin_headers = _auth_headers(client, "options-admin@example.com", UserRole.admin)
+    client.post(
+        "/opportunities",
+        headers=admin_headers,
+        json={
+            "title": "NAWA Research Mobility",
+            "opportunity_type": "fellowship",
+            "source": "nawa",
+            "url": "https://example.org/nawa/research-mobility",
+            "keywords": ["mobility", "poland"],
+            "countries": ["Poland"],
+            "disciplines": ["Research"],
+        },
+    )
+
+    response = client.get("/opportunities/options")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "nawa" in body["sources"]
+    assert "Poland" in body["countries"]
+    assert "mobility" in body["keywords"]
+
+
 def test_request_id_header_is_echoed_on_success_and_error(client):
     success = client.get("/health", headers={"X-Request-ID": "test-request-123"})
     error = client.get("/opportunities/999", headers={"X-Request-ID": "missing-opportunity-123"})

@@ -5,6 +5,7 @@ import { ActionButton, Field, JsonTextArea, SelectField } from "../components/ui
 
 type ImportForm = { source: string; dry_run: boolean; payload: string };
 type GrantsForm = { keyword: string; limit: number; import_results: boolean };
+type EUFundingForm = { keyword: string; source_name: string; programme: string; limit: number; import_results: boolean };
 type ExternalForm = {
   source_name: string;
   source_url: string;
@@ -28,18 +29,58 @@ const supportedExternalSources = [
   "msca4ukraine",
   "daad_ukraine",
   "fulbright_ukraine",
+  "erasmus",
   "euraxess",
+  "horizon_europe",
   "daad",
   "fulbright",
   "msca",
+  "nawa",
 ];
 
 const adminTabs = ["sources", "curated", "jobs", "operations"] as const;
 type AdminTab = (typeof adminTabs)[number];
 
-const ukrainianSourcePresets = [
+const sourcePresets = [
+  {
+    label: "Horizon Europe",
+    group: "European",
+    source_name: "horizon_europe",
+    source_url: "https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/calls-for-proposals",
+    source_kind: "html" as const,
+    default_opportunity_type: "grant" as OpportunityType,
+    default_country: "European Union",
+    default_career_stage: "postdoc",
+    default_discipline: "Research and Innovation",
+    keyword: "horizon europe, european commission, research",
+  },
+  {
+    label: "Erasmus+",
+    group: "European",
+    source_name: "erasmus",
+    source_url: "https://erasmus-plus.ec.europa.eu/opportunities/opportunities-for-individuals",
+    source_kind: "html" as const,
+    default_opportunity_type: "exchange" as OpportunityType,
+    default_country: "European Union",
+    default_career_stage: "",
+    default_discipline: "Education",
+    keyword: "erasmus, mobility, exchange, europe",
+  },
+  {
+    label: "NAWA",
+    group: "European",
+    source_name: "nawa",
+    source_url: "https://nawa.gov.pl/en/",
+    source_kind: "html" as const,
+    default_opportunity_type: "fellowship" as OpportunityType,
+    default_country: "Poland",
+    default_career_stage: "",
+    default_discipline: "Research",
+    keyword: "nawa, poland, scholarship, academic exchange",
+  },
   {
     label: "NRFU",
+    group: "Ukraine",
     source_name: "nrfu",
     source_url: "https://nrfu.org.ua/en/contests/current-calls/",
     source_kind: "html" as const,
@@ -51,6 +92,7 @@ const ukrainianSourcePresets = [
   },
   {
     label: "House of Europe",
+    group: "Ukraine",
     source_name: "house_of_europe",
     source_url: "https://houseofeurope.org.ua/en/opportunities",
     source_kind: "html" as const,
@@ -62,6 +104,7 @@ const ukrainianSourcePresets = [
   },
   {
     label: "Science for Ukraine",
+    group: "Ukraine",
     source_name: "science_for_ukraine",
     source_url: "https://scienceforukraine.eu/",
     source_kind: "html" as const,
@@ -73,6 +116,7 @@ const ukrainianSourcePresets = [
   },
   {
     label: "MSCA4Ukraine",
+    group: "Ukraine",
     source_name: "msca4ukraine",
     source_url: "https://sareurope.eu/msca4ukraine/",
     source_kind: "html" as const,
@@ -84,6 +128,7 @@ const ukrainianSourcePresets = [
   },
   {
     label: "DAAD Ukraine",
+    group: "Ukraine",
     source_name: "daad_ukraine",
     source_url: "https://www.daad-ukraine.org/en/",
     source_kind: "html" as const,
@@ -95,6 +140,7 @@ const ukrainianSourcePresets = [
   },
   {
     label: "Fulbright Ukraine",
+    group: "Ukraine",
     source_name: "fulbright_ukraine",
     source_url: "https://fulbright.org.ua/en/",
     source_kind: "html" as const,
@@ -106,9 +152,17 @@ const ukrainianSourcePresets = [
   },
 ];
 
+const euFundingPresets = [
+  { label: "Horizon Europe", source_name: "horizon_europe", programme: "Horizon Europe", keyword: "research innovation" },
+  { label: "MSCA", source_name: "msca", programme: "Marie Sklodowska-Curie", keyword: "postdoctoral fellowship doctoral network staff exchanges" },
+  { label: "Erasmus+ Calls", source_name: "erasmus", programme: "Erasmus+", keyword: "erasmus mobility education cooperation" },
+  { label: "All EU Funding", source_name: "eu_funding_tenders", programme: "", keyword: "research fellowship mobility" },
+];
+
 export function AdminView({
   importForm,
   grantsForm,
+  euFundingForm,
   externalForm,
   jobForm,
   queueStats,
@@ -119,10 +173,12 @@ export function AdminView({
   adminBusy,
   onImportFormChange,
   onGrantsFormChange,
+  onEuFundingFormChange,
   onExternalFormChange,
   onJobFormChange,
   onEnqueueGrantsGov,
   onRunGrantsGovNow,
+  onRunEuFundingTenders,
   onRunBulkImport,
   onRunExternalImport,
   onLoadQueues,
@@ -135,6 +191,7 @@ export function AdminView({
 }: {
   importForm: ImportForm;
   grantsForm: GrantsForm;
+  euFundingForm: EUFundingForm;
   externalForm: ExternalForm;
   jobForm: JobForm;
   queueStats: QueueStats[];
@@ -145,10 +202,12 @@ export function AdminView({
   adminBusy: string | null;
   onImportFormChange: (form: ImportForm) => void;
   onGrantsFormChange: (form: GrantsForm) => void;
+  onEuFundingFormChange: (form: EUFundingForm) => void;
   onExternalFormChange: (form: ExternalForm) => void;
   onJobFormChange: (form: JobForm) => void;
   onEnqueueGrantsGov: (event: FormEvent) => void;
   onRunGrantsGovNow: (event: FormEvent) => void;
+  onRunEuFundingTenders: (event: FormEvent) => void;
   onRunBulkImport: (event: FormEvent) => void;
   onRunExternalImport: (event: FormEvent) => void;
   onLoadQueues: () => void;
@@ -182,12 +241,12 @@ export function AdminView({
         <div className="admin-tab-panel">
           <div className="admin-help-grid">
             <article>
-              <strong>External imports</strong>
-              <p>Use this for RSS, JSON, or HTML pages from real providers. Source-specific connectors normalize sparse pages into catalog records.</p>
+              <strong>Structured EU imports</strong>
+              <p>Use EU Funding & Tenders for Horizon, MSCA, Erasmus+ organisation calls, and other official Commission funding records.</p>
             </article>
             <article>
-              <strong>Ukrainian sources</strong>
-              <p>Pick a preset, confirm the URL and defaults, then run the import. HTML sources extract opportunity-like links conservatively.</p>
+              <strong>External imports</strong>
+              <p>Use RSS, JSON, or HTML only when a provider has concrete opportunity pages. Avoid generic landing pages.</p>
             </article>
             <article>
               <strong>Quality check</strong>
@@ -196,7 +255,54 @@ export function AdminView({
           </div>
 
           <div className="source-presets">
-            {ukrainianSourcePresets.map((preset) => (
+            {euFundingPresets.map((preset) => (
+              <button
+                key={preset.source_name}
+                type="button"
+                onClick={() =>
+                  onEuFundingFormChange({
+                    ...euFundingForm,
+                    source_name: preset.source_name,
+                    programme: preset.programme,
+                    keyword: preset.keyword,
+                  })
+                }
+              >
+                <strong>{preset.label}</strong>
+                <span>EU Funding & Tenders API</span>
+              </button>
+            ))}
+          </div>
+
+          <form className="grid-form admin-form" onSubmit={onRunEuFundingTenders}>
+            <div className="span-2">
+              <h3>EU Funding & Tenders</h3>
+              <p className="muted">Imports concrete calls from the Commission SEDIA search API. This is preferred over scraping Erasmus or Horizon landing pages.</p>
+            </div>
+            <Field labelText="Keyword" value={euFundingForm.keyword} onChange={(keyword) => onEuFundingFormChange({ ...euFundingForm, keyword })} />
+            <SelectField
+              labelText="Save as source"
+              value={euFundingForm.source_name}
+              options={["eu_funding_tenders", "horizon_europe", "erasmus", "msca"]}
+              onChange={(source_name) => onEuFundingFormChange({ ...euFundingForm, source_name })}
+            />
+            <Field labelText="Programme hint" value={euFundingForm.programme} onChange={(programme) => onEuFundingFormChange({ ...euFundingForm, programme })} />
+            <Field labelText="Limit" type="number" value={String(euFundingForm.limit)} onChange={(limit) => onEuFundingFormChange({ ...euFundingForm, limit: Number(limit) })} />
+            <div className="admin-form-actions span-2">
+              <label className="toggle filter-toggle">
+                <input
+                  type="checkbox"
+                  checked={euFundingForm.import_results}
+                  onChange={(event) => onEuFundingFormChange({ ...euFundingForm, import_results: event.target.checked })}
+                />
+                <span>Import results</span>
+              </label>
+              <ActionButton busy={adminBusy === "eu-funding"}>Import EU calls</ActionButton>
+            </div>
+          </form>
+
+          <div className="source-presets">
+            {sourcePresets.map((preset) => (
               <button
                 key={preset.source_name}
                 type="button"
@@ -215,7 +321,7 @@ export function AdminView({
                 }
               >
                 <strong>{preset.label}</strong>
-                <span>{preset.source_name}</span>
+                <span>{preset.group} · {preset.source_name}</span>
               </button>
             ))}
           </div>

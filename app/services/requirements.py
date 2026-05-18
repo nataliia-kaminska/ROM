@@ -8,6 +8,7 @@ import httpx
 from app.core.config import settings
 from app.db.models import Opportunity, ResearcherProfile, ResearcherProfileDetails
 from app.services.serialization import normalize_terms, pack_list, unpack_list
+from app.services.source_quality import is_generic_provider_reference
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,9 @@ class ExtractedRequirements:
 
 @dataclass
 class ExtractedOpportunityMetadata:
+    title: str = ""
+    summary: str = ""
+    eligibility: str = ""
     disciplines: list[str] = field(default_factory=list)
     keywords: list[str] = field(default_factory=list)
     countries: list[str] = field(default_factory=list)
@@ -95,8 +99,11 @@ def extract_requirements_text(title: str, summary: str, eligibility: str) -> Ext
     return requirements
 
 
-def extract_opportunity_metadata(opportunity: Opportunity) -> ExtractedOpportunityMetadata:
+def extract_opportunity_metadata(opportunity: Opportunity, page_preview: str = "") -> ExtractedOpportunityMetadata:
     deterministic = ExtractedOpportunityMetadata(
+        title=opportunity.title,
+        summary=opportunity.summary,
+        eligibility=opportunity.eligibility,
         disciplines=unpack_list(opportunity.disciplines),
         keywords=unpack_list(opportunity.keywords),
         countries=unpack_list(opportunity.countries),
@@ -111,6 +118,7 @@ def extract_opportunity_metadata(opportunity: Opportunity) -> ExtractedOpportuni
             api_key=settings.groq_api_key,
             model=settings.opportunity_extraction_model or settings.groq_model,
             opportunity=opportunity,
+            page_preview=page_preview,
         )
     elif provider == "local":
         ai_result = _extract_with_chat_completion(
@@ -119,12 +127,16 @@ def extract_opportunity_metadata(opportunity: Opportunity) -> ExtractedOpportuni
             api_key="local",
             model=settings.opportunity_extraction_model or settings.advisor_local_model,
             opportunity=opportunity,
+            page_preview=page_preview,
         )
     else:
         ai_result = None
     if ai_result is None:
         return deterministic
     return ExtractedOpportunityMetadata(
+        title=_best_public_text(ai_result.title, deterministic.title, field_name="title", opportunity=opportunity),
+        summary=_best_public_text(ai_result.summary, deterministic.summary, field_name="summary", opportunity=opportunity),
+        eligibility=_best_public_text(ai_result.eligibility, deterministic.eligibility, field_name="eligibility", opportunity=opportunity),
         disciplines=_merge_terms(deterministic.disciplines, ai_result.disciplines),
         keywords=_merge_terms(deterministic.keywords, ai_result.keywords),
         countries=_merge_terms(deterministic.countries, ai_result.countries),
@@ -149,8 +161,11 @@ def serialize_requirements(requirements: ExtractedRequirements) -> str:
     return json.dumps(asdict(requirements), sort_keys=True)
 
 
-def refresh_opportunity_requirements(opportunity: Opportunity) -> ExtractedRequirements:
-    metadata = extract_opportunity_metadata(opportunity)
+def refresh_opportunity_requirements(opportunity: Opportunity, page_preview: str = "") -> ExtractedRequirements:
+    metadata = extract_opportunity_metadata(opportunity, page_preview=page_preview)
+    opportunity.title = metadata.title or opportunity.title
+    opportunity.summary = metadata.summary or opportunity.summary
+    opportunity.eligibility = metadata.eligibility or opportunity.eligibility
     opportunity.disciplines = pack_list(metadata.disciplines)
     opportunity.keywords = pack_list(metadata.keywords)
     opportunity.countries = pack_list(metadata.countries)
@@ -279,6 +294,7 @@ def _extract_with_chat_completion(
     api_key: str,
     model: str,
     opportunity: Opportunity,
+    page_preview: str = "",
 ) -> ExtractedOpportunityMetadata | None:
     if provider == "groq" and not api_key:
         logger.warning("opportunity extraction provider=groq skipped because GROQ_API_KEY is empty")
@@ -290,15 +306,16 @@ def _extract_with_chat_completion(
             json={
                 "model": model,
                 "temperature": 0,
-                "max_tokens": 650,
+                "max_tokens": 900,
                 "response_format": {"type": "json_object"},
                 "messages": [
                     {
                         "role": "system",
                         "content": (
                             "Extract structured academic opportunity metadata. Return only valid JSON. "
-                            "Use short canonical values. Do not include funder names, agencies, offices, URLs, "
-                            "or source names as keywords or disciplines."
+                            "Use short canonical values. Improve title, summary, and eligibility only from the "
+                            "provided evidence. Do not invent facts. Do not include funder names, agencies, offices, "
+                            "URLs, or source names as keywords or disciplines."
                         ),
                     },
                     {
@@ -306,6 +323,9 @@ def _extract_with_chat_completion(
                         "content": json.dumps(
                             {
                                 "schema": {
+                                    "title": "concise official opportunity title",
+                                    "summary": "1-3 sentence user-facing description",
+                                    "eligibility": "concise eligibility requirements",
                                     "disciplines": ["Computer Science"],
                                     "keywords": ["machine learning"],
                                     "countries": ["Germany"],
@@ -331,6 +351,7 @@ def _extract_with_chat_completion(
                                     "countries": unpack_list(opportunity.countries),
                                     "career_stages": unpack_list(opportunity.career_stages),
                                 },
+                                "page_preview": page_preview,
                             },
                             ensure_ascii=False,
                         ),
@@ -355,6 +376,9 @@ def _extract_with_chat_completion(
             confidence=max(0, min(95, int(payload.get("confidence", 0) or 0))),
         )
         return ExtractedOpportunityMetadata(
+            title=_clean_scalar(payload.get("title", ""), max_length=180),
+            summary=_clean_scalar(payload.get("summary", ""), max_length=900),
+            eligibility=_clean_scalar(payload.get("eligibility", ""), max_length=900),
             disciplines=_clean_terms(payload.get("disciplines", [])),
             keywords=_clean_terms(payload.get("keywords", [])),
             countries=requirements.countries,
@@ -380,6 +404,35 @@ def _merge_requirements(left: ExtractedRequirements, right: ExtractedRequirement
         snippets=_merge_terms(left.snippets, right.snippets, max_items=5),
         confidence=max(left.confidence, right.confidence),
     )
+
+
+def _best_public_text(candidate: str, current: str, field_name: str, opportunity: Opportunity) -> str:
+    cleaned_candidate = _clean_scalar(candidate, max_length=900 if field_name != "title" else 180)
+    cleaned_current = _clean_scalar(current, max_length=900 if field_name != "title" else 180)
+    if not cleaned_candidate:
+        return cleaned_current
+    if field_name == "title" and is_generic_provider_reference(opportunity.source, cleaned_candidate, opportunity.url):
+        return cleaned_current
+    if field_name == "title":
+        return cleaned_candidate if _looks_more_specific_title(cleaned_candidate, cleaned_current) else cleaned_current
+    if _is_placeholder_text(cleaned_current):
+        return cleaned_candidate
+    if len(cleaned_candidate) >= max(80, len(cleaned_current) + 30):
+        return cleaned_candidate
+    return cleaned_current
+
+
+def _looks_more_specific_title(candidate: str, current: str) -> bool:
+    if _is_placeholder_text(current):
+        return True
+    candidate_words = [word for word in candidate.split() if len(word) > 2]
+    current_words = [word for word in current.split() if len(word) > 2]
+    return len(candidate_words) >= 3 and len(candidate_words) >= len(current_words)
+
+
+def _is_placeholder_text(value: str) -> bool:
+    normalized = value.casefold().strip(" .:-")
+    return normalized in {"", "see call page", "see opportunity page", "details to be confirmed", "no summary available"} or len(normalized) < 20
 
 
 def _merge_terms(*groups: list[str], max_items: int = 12) -> list[str]:

@@ -1,6 +1,7 @@
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.exceptions import ConflictError
 from app.db.models import IngestionBatch, Opportunity
 from app.repositories import opportunities as opportunity_repository
@@ -29,9 +30,10 @@ def create_opportunity(db: Session, payload: OpportunityCreate) -> Opportunity:
         db.rollback()
         raise DuplicateOpportunityError(str(payload.url)) from exc
     db.refresh(opportunity)
-    persist_opportunity_embedding_vector(db, opportunity)
-    db.commit()
-    db.refresh(opportunity)
+    if settings.opportunity_embedding_on_import:
+        persist_opportunity_embedding_vector(db, opportunity)
+        db.commit()
+        db.refresh(opportunity)
     index_opportunity_for_search(opportunity)
     return opportunity
 
@@ -60,8 +62,10 @@ def bulk_import_opportunities(
     if not payload.dry_run:
         for opportunity in opportunities:
             db.refresh(opportunity)
-            persist_opportunity_embedding_vector(db, opportunity)
-        db.commit()
+            if settings.opportunity_embedding_on_import:
+                persist_opportunity_embedding_vector(db, opportunity)
+        if settings.opportunity_embedding_on_import:
+            db.commit()
         for opportunity in opportunities:
             db.refresh(opportunity)
             index_opportunity_for_search(opportunity)

@@ -1,7 +1,7 @@
 import type { Opportunity, OpportunityStatus, Recommendation } from "../types";
 import { careerStages, opportunityTypes, type View } from "../constants";
 import { OpportunityCard } from "../components/opportunities";
-import { ActionButton, EmptyState, HelpTip, MultiValueField, SkeletonCards } from "../components/ui";
+import { EmptyState, HelpTip, MultiValueField, SkeletonCards } from "../components/ui";
 import { label, splitList } from "../utils/format";
 
 type FeedFilters = {
@@ -28,7 +28,6 @@ export function FeedView({
   page,
   hasNextPage,
   onFiltersChange,
-  onApplyFilters,
   onResetFilters,
   onPageChange,
   onViewChange,
@@ -47,7 +46,6 @@ export function FeedView({
   page: number;
   hasNextPage: boolean;
   onFiltersChange: (filters: FeedFilters) => void;
-  onApplyFilters: () => void;
   onResetFilters: () => void;
   onPageChange: (page: number) => void;
   onViewChange: (view: View) => void;
@@ -140,9 +138,6 @@ export function FeedView({
             />
             <span>Active only</span>
           </label>
-          <ActionButton variant="secondary" type="button" busy={workspaceLoading} onClick={onApplyFilters}>
-            Apply filters
-          </ActionButton>
           <button className="tertiary" type="button" onClick={onResetFilters}>
             Clear filters
           </button>

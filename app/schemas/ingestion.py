@@ -18,6 +18,22 @@ class GrantsGovIngestionResult(BaseModel):
     opportunities: list[OpportunityRead]
 
 
+class EUFundingTendersSearchRequest(BaseModel):
+    keyword: str = Field(default="research", min_length=2)
+    source_name: str = Field(default="eu_funding_tenders", min_length=2)
+    programme: str | None = None
+    limit: int = Field(default=10, ge=1, le=50)
+    import_results: bool = True
+
+
+class EUFundingTendersIngestionResult(BaseModel):
+    source: str
+    batch_id: int | None = None
+    imported_count: int
+    skipped_count: int
+    opportunities: list[OpportunityPreview]
+
+
 class ExternalSourceImportRequest(BaseModel):
     source_name: str = Field(..., min_length=2)
     source_url: HttpUrl

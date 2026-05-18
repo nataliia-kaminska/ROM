@@ -32,8 +32,15 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 
 def create_access_token(subject: str, extra_claims: dict[str, Any] | None = None) -> str:
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
-    payload: dict[str, Any] = {"sub": subject, "exp": expires_at}
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(minutes=settings.access_token_expire_minutes)
+    payload: dict[str, Any] = {
+        "sub": subject,
+        "exp": expires_at,
+        "iat": now,
+        "jti": create_url_token(),
+        "typ": "access",
+    }
     if extra_claims:
         payload.update(extra_claims)
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)

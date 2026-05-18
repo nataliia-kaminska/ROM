@@ -21,6 +21,8 @@ def get_optional_current_user(
         return None
     try:
         payload = decode_access_token(credentials.credentials)
+        if payload.get("typ", "access") != "access":
+            raise ValueError("Invalid token type")
         user_id = int(payload["sub"])
     except (InvalidTokenError, KeyError, ValueError) as exc:
         raise HTTPException(

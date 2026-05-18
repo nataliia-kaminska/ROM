@@ -39,9 +39,10 @@ def score_opportunity(
     details: ResearcherProfileDetails | None = None,
     profile_status: ProfileOpportunityStatus | None = None,
     history_signals: UserHistorySignals | None = None,
+    profile_vector: list[float] | None = None,
 ) -> RecommendationScore:
     reasons: list[str] = []
-    semantic = _semantic_score(profile, opportunity, details, reasons)
+    semantic = _semantic_score(profile, opportunity, details, reasons, profile_vector)
     eligibility = _eligibility_score(profile, opportunity, details, reasons)
     deadline = _deadline_score(opportunity, reasons)
     user_history = _history_score(opportunity, profile_status, history_signals or UserHistorySignals(), reasons)
@@ -99,9 +100,10 @@ def _semantic_score(
     opportunity: Opportunity,
     details: ResearcherProfileDetails | None,
     reasons: list[str],
+    profile_vector: list[float] | None = None,
 ) -> int:
-    profile_vector = ensure_profile_embedding(profile, details)
-    opportunity_vector = ensure_opportunity_embedding(opportunity)
+    profile_vector = profile_vector if profile_vector is not None else ensure_profile_embedding(profile, details)
+    opportunity_vector = ensure_opportunity_embedding(opportunity, allow_backfill=False)
     similarity = cosine_similarity(profile_vector, opportunity_vector)
     semantic_score = max(0, min(100, round(similarity * 100)))
     if semantic_score >= 55:

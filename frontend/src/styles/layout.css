@@ -20,6 +20,23 @@
   width: 100%;
 }
 
+.auth-divider {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: var(--text-sm);
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  background: var(--border);
+  content: "";
+  flex: 1;
+  height: 1px;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 272px 1fr;

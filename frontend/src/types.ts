@@ -11,6 +11,9 @@ export type User = {
   role: "researcher" | "admin";
   is_active: boolean;
   email_verified: boolean;
+  auth_provider: "local" | "orcid" | string;
+  orcid_id: string | null;
+  password_login_enabled: boolean;
 };
 
 export type AuthResponse = {
@@ -22,6 +25,10 @@ export type AuthResponse = {
 export type RegisterResponse = {
   message: string;
   email: string;
+};
+
+export type AuthProviderConfig = {
+  orcid_oauth_enabled: boolean;
 };
 
 export type Profile = {
@@ -79,6 +86,14 @@ export type Opportunity = {
     confidence: number;
   } | null;
   requirements_confidence?: number;
+};
+
+export type OpportunityFilterOptions = {
+  sources: string[];
+  countries: string[];
+  keywords: string[];
+  disciplines: string[];
+  career_stages: string[];
 };
 
 export type Recommendation = {

@@ -5,6 +5,7 @@ import { BoardView } from "../views/BoardView";
 import { DashboardView } from "../views/DashboardView";
 import { FeedView } from "../views/FeedView";
 import { NotificationsView } from "../views/NotificationsView";
+import { OrcidCallbackView } from "../views/OrcidCallbackView";
 import { ProfileView } from "../views/ProfileView";
 import { RemindersView } from "../views/RemindersView";
 import { VerifyEmailView } from "../views/VerifyEmailView";
@@ -28,6 +29,8 @@ export function WorkspaceRoutes({
   switch (route.view) {
     case "verify_email":
       return <VerifyEmailView onViewChange={route.onViewChange} />;
+    case "orcid_callback":
+      return <OrcidCallbackView onViewChange={route.onViewChange} />;
     case "about":
       return <AboutView isSignedIn={workspace.isSignedIn} onViewChange={route.onViewChange} />;
     case "dashboard":
@@ -61,7 +64,6 @@ export function WorkspaceRoutes({
           page={workspace.matchesPage}
           hasNextPage={workspace.matchesHasNextPage}
           onFiltersChange={workspace.onFiltersChange}
-          onApplyFilters={workspace.onApplyFilters}
           onResetFilters={workspace.onResetFilters}
           onPageChange={workspace.onMatchesPageChange}
           onViewChange={route.onViewChange}
@@ -141,6 +143,7 @@ export function WorkspaceRoutes({
         <AdminView
           importForm={admin.importForm}
           grantsForm={admin.grantsForm}
+          euFundingForm={admin.euFundingForm}
           externalForm={admin.externalForm}
           jobForm={admin.jobForm}
           queueStats={admin.queueStats}
@@ -151,10 +154,12 @@ export function WorkspaceRoutes({
           adminBusy={admin.adminBusy}
           onImportFormChange={admin.onImportFormChange}
           onGrantsFormChange={admin.onGrantsFormChange}
+          onEuFundingFormChange={admin.onEuFundingFormChange}
           onExternalFormChange={admin.onExternalFormChange}
           onJobFormChange={admin.onJobFormChange}
           onEnqueueGrantsGov={admin.onEnqueueGrantsGov}
           onRunGrantsGovNow={admin.onRunGrantsGovNow}
+          onRunEuFundingTenders={admin.onRunEuFundingTenders}
           onRunBulkImport={admin.onRunBulkImport}
           onRunExternalImport={admin.onRunExternalImport}
           onLoadQueues={admin.onLoadQueues}

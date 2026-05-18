@@ -119,6 +119,67 @@ class MscaConnector(SourceConnector):
         )
 
 
+class HorizonEuropeConnector(SourceConnector):
+    source_name = "horizon_europe"
+    display_name = "Horizon Europe"
+    default_type = OpportunityType.grant
+    default_keywords = ("horizon europe", "european commission", "research and innovation", "eu funding")
+
+    def normalize(self, item: dict[str, Any]) -> NormalizedSourceItem:
+        normalized = super().normalize(item)
+        return NormalizedSourceItem(
+            **{
+                **normalized.__dict__,
+                "summary": normalized.summary or _first(item, "callAbstract", "topicDescription", "objective", "description"),
+                "eligibility": normalized.eligibility or _first(item, "conditions", "admissibilityConditions", "eligibilityConditions"),
+                "countries": normalized.countries or ["European Union"],
+                "disciplines": normalized.disciplines or _list_value(item.get("programme_part") or item.get("destination") or item.get("topicArea")),
+                "deadline": normalized.deadline or _first(item, "deadlineDate", "submissionDeadline", "deadline"),
+            }
+        )
+
+
+class ErasmusConnector(SourceConnector):
+    source_name = "erasmus"
+    display_name = "Erasmus+"
+    default_type = OpportunityType.exchange
+    default_keywords = ("erasmus+", "erasmus", "mobility", "european union")
+
+    def normalize(self, item: dict[str, Any]) -> NormalizedSourceItem:
+        normalized = super().normalize(item)
+        text = f"{normalized.title} {normalized.summary} {normalized.eligibility}"
+        return NormalizedSourceItem(
+            **{
+                **normalized.__dict__,
+                "summary": normalized.summary or _first(item, "callAbstract", "description", "objective"),
+                "eligibility": normalized.eligibility or _first(item, "who_can_apply", "target_group", "eligibleApplicants"),
+                "countries": normalized.countries or ["European Union"],
+                "career_stages": normalized.career_stages or _career_stages_from_text(text),
+            }
+        )
+
+
+class NawaConnector(SourceConnector):
+    source_name = "nawa"
+    display_name = "NAWA"
+    default_type = OpportunityType.fellowship
+    default_keywords = ("nawa", "poland", "academic exchange", "scholarship")
+
+    def normalize(self, item: dict[str, Any]) -> NormalizedSourceItem:
+        normalized = super().normalize(item)
+        text = f"{normalized.title} {normalized.summary} {normalized.eligibility}"
+        return NormalizedSourceItem(
+            **{
+                **normalized.__dict__,
+                "summary": normalized.summary or _first(item, "programmeDescription", "description", "lead"),
+                "eligibility": normalized.eligibility or _first(item, "targetGroup", "requirements", "who_can_apply"),
+                "countries": normalized.countries or ["Poland"],
+                "career_stages": normalized.career_stages or _career_stages_from_text(text),
+                "deadline": normalized.deadline or _first(item, "applicationDeadline", "deadlineDate"),
+            }
+        )
+
+
 class NrfuConnector(SourceConnector):
     source_name = "nrfu"
     display_name = "National Research Foundation of Ukraine"
@@ -254,13 +315,17 @@ class FulbrightUkraineConnector(FulbrightConnector):
 
 CONNECTORS: dict[str, SourceConnector] = {
     "euraxess": EuraxessConnector(),
+    "erasmus": ErasmusConnector(),
     "daad": DaadConnector(),
     "daad_ukraine": DaadUkraineConnector(),
     "fulbright": FulbrightConnector(),
     "fulbright_ukraine": FulbrightUkraineConnector(),
+    "horizon_europe": HorizonEuropeConnector(),
+    "horizon": HorizonEuropeConnector(),
     "house_of_europe": HouseOfEuropeConnector(),
     "msca": MscaConnector(),
     "msca4ukraine": Msca4UkraineConnector(),
+    "nawa": NawaConnector(),
     "nauka_gov_ua": NaukaGovUaConnector(),
     "nrfu": NrfuConnector(),
     "science_for_ukraine": ScienceForUkraineConnector(),

@@ -1,5 +1,5 @@
-import type { FormEvent, ReactNode } from "react";
-import type { ProfileDetailsPayload } from "../api";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { api, type ProfileDetailsPayload } from "../api";
 import { viewRoutes, type View } from "../constants";
 import type { Profile, User } from "../types";
 import { profileLabel, viewLabel } from "../utils/format";
@@ -26,6 +26,23 @@ export function AuthScreen({
   onAuthModeChange: (mode: "login" | "register") => void;
   onContinueAsGuest: () => void;
 }) {
+  const [orcidEnabled, setOrcidEnabled] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    api
+      .authProviders()
+      .then((providers) => {
+        if (mounted) setOrcidEnabled(providers.orcid_oauth_enabled);
+      })
+      .catch(() => {
+        if (mounted) setOrcidEnabled(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   return (
     <main className="auth-shell">
       <section className="auth-panel">
@@ -49,6 +66,16 @@ export function AuthScreen({
             {authMode === "login" ? "Sign in" : "Sign up"}
           </ActionButton>
         </form>
+        {orcidEnabled && (
+          <>
+            <div className="auth-divider">
+              <span>or</span>
+            </div>
+            <button className="secondary span-2" type="button" onClick={() => { window.location.href = api.orcidStartUrl(); }}>
+              Sign in with ORCID
+            </button>
+          </>
+        )}
         <button className="ghost" onClick={() => onAuthModeChange(authMode === "login" ? "register" : "login")}>
           {authMode === "login" ? "Need an account? Sign up" : "Already have an account? Sign in"}
         </button>
@@ -86,6 +113,7 @@ export function AppShell({
   children: ReactNode;
 }) {
   const title = view === "about" ? "Research Opportunity Matcher" : activeProfile ? profileLabel(activeProfile, user?.email) : isGuest ? "Browse opportunities" : "Create your first profile";
+  const accountIdentity = user?.auth_provider === "orcid" && user.orcid_id ? `ORCID ${user.orcid_id}` : user?.email;
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -113,7 +141,7 @@ export function AppShell({
         <div className="sidebar-footer">
           <div className="account-summary">
             <small>{isGuest ? "Guest access" : "Signed in"}</small>
-            <span>{isGuest ? "Browsing public catalog" : user?.email}</span>
+            <span>{isGuest ? "Browsing public catalog" : accountIdentity}</span>
             {activeProfile && <small>Profile: {profileLabel(activeProfile, user?.email)}</small>}
           </div>
           <button className="ghost" onClick={onLogout}>

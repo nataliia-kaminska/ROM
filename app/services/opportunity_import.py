@@ -1,8 +1,10 @@
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db.models import Opportunity
 from app.schemas.opportunities import OpportunityCreate
-from app.services.embeddings import ensure_opportunity_embedding
+from app.services.embeddings import ensure_opportunity_embedding, persist_opportunity_embedding_vector
+from app.services.opportunity_page_preview import fetch_opportunity_page_preview
 from app.services.requirements import refresh_opportunity_requirements
 from app.services.serialization import pack_list, unpack_list
 
@@ -21,8 +23,9 @@ def build_opportunity(payload: OpportunityCreate, source: str | None = None) -> 
         career_stages=pack_list(_clean_list(payload.career_stages)),
         deadline=payload.deadline,
     )
-    refresh_opportunity_requirements(opportunity)
-    ensure_opportunity_embedding(opportunity)
+    refresh_opportunity_requirements(opportunity, page_preview=_page_preview_for(opportunity))
+    if settings.opportunity_embedding_on_import:
+        ensure_opportunity_embedding(opportunity)
     return opportunity
 
 
@@ -39,8 +42,9 @@ def apply_opportunity_payload(opportunity: Opportunity, payload: OpportunityCrea
     opportunity.career_stages = pack_list(_merge_lists(unpack_list(opportunity.career_stages), payload.career_stages))
     opportunity.deadline = payload.deadline
     opportunity.opportunity_embedding = ""
-    refresh_opportunity_requirements(opportunity)
-    ensure_opportunity_embedding(opportunity)
+    refresh_opportunity_requirements(opportunity, page_preview=_page_preview_for(opportunity))
+    if settings.opportunity_embedding_on_import:
+        ensure_opportunity_embedding(opportunity)
 
 
 def import_opportunities(
@@ -83,6 +87,10 @@ def import_opportunities(
         db.commit()
         for opportunity in processed:
             db.refresh(opportunity)
+            if settings.opportunity_embedding_on_import:
+                persist_opportunity_embedding_vector(db, opportunity)
+        if settings.opportunity_embedding_on_import:
+            db.commit()
 
     return processed, imported_count, updated_count, skipped_count
 
@@ -95,6 +103,13 @@ def _find_content_duplicate(db: Session, payload: OpportunityCreate, source: str
         if _normalized_title(candidate.title) == title_key and candidate.source.casefold() == source_key:
             return candidate
     return None
+
+
+def _page_preview_for(opportunity: Opportunity) -> str:
+    provider = settings.opportunity_extraction_provider.strip().lower()
+    if provider not in {"groq", "local"}:
+        return ""
+    return fetch_opportunity_page_preview(opportunity.url)
 
 
 def _clean_text(value: str | None) -> str:

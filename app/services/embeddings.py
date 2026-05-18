@@ -5,6 +5,7 @@ import math
 import re
 import subprocess
 import sys
+from time import perf_counter
 from datetime import datetime
 from functools import lru_cache
 from typing import Protocol
@@ -85,7 +86,7 @@ class SentenceTransformerEmbeddingProvider:
                 ) from exc
         logger.info("loading sentence-transformers embedding model model=%s", model_name)
         try:
-            self.model = SentenceTransformer(model_name)
+            self.model = SentenceTransformer(model_name, local_files_only=settings.embedding_local_files_only)
         except Exception as exc:
             raise RuntimeError(
                 f"Could not load embedding model `{model_name}`. Check network/model cache, "
@@ -96,8 +97,18 @@ class SentenceTransformerEmbeddingProvider:
         self.dimensions = int(dimension_getter())
 
     def embed(self, text: str) -> list[float]:
-        vector = self.model.encode(text or "", normalize_embeddings=True)
-        return [float(value) for value in vector]
+        started_at = perf_counter()
+        vector = self.model.encode(text or "", normalize_embeddings=True, show_progress_bar=False)
+        values = [float(value) for value in vector]
+        logger.info(
+            "embedding encoded provider=%s model=%s chars=%s dimensions=%s duration_ms=%.2f",
+            self.name,
+            self.model_name,
+            len(text or ""),
+            len(values),
+            (perf_counter() - started_at) * 1000,
+        )
+        return values
 
 
 @lru_cache(maxsize=1)
@@ -198,10 +209,18 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
 def ensure_profile_embedding(profile: ResearcherProfile, details: ResearcherProfileDetails | None) -> list[float]:
     provider = get_embedding_provider()
     if details is None:
+        logger.info("profile embedding cache unavailable profile_id=%s reason=no_details", profile.id)
         return embed_text(profile_embedding_text(profile))
     existing = deserialize_embedding(details.profile_embedding)
     if existing and details.embedding_model == provider.model_name:
+        logger.info("profile embedding cache hit profile_id=%s model=%s", profile.id, details.embedding_model)
         return existing
+    logger.info(
+        "profile embedding cache miss profile_id=%s existing_model=%s target_model=%s",
+        profile.id,
+        details.embedding_model,
+        provider.model_name,
+    )
     vector = embed_text(profile_embedding_text(profile, details))
     details.profile_embedding = serialize_embedding(vector)
     details.embedding_model = provider.model_name
@@ -209,11 +228,20 @@ def ensure_profile_embedding(profile: ResearcherProfile, details: ResearcherProf
     return vector
 
 
-def ensure_opportunity_embedding(opportunity: Opportunity) -> list[float]:
+def ensure_opportunity_embedding(opportunity: Opportunity, *, allow_backfill: bool = True) -> list[float]:
     provider = get_embedding_provider()
     existing = deserialize_embedding(opportunity.opportunity_embedding)
     if existing and opportunity.embedding_model == provider.model_name:
         return existing
+    if not allow_backfill:
+        logger.info(
+            "opportunity embedding cache miss without backfill opportunity_id=%s source=%s model=%s target_model=%s",
+            opportunity.id,
+            opportunity.source,
+            opportunity.embedding_model,
+            provider.model_name,
+        )
+        return []
     vector = embed_text(opportunity_embedding_text(opportunity))
     opportunity.opportunity_embedding = serialize_embedding(vector)
     opportunity.embedding_model = provider.model_name

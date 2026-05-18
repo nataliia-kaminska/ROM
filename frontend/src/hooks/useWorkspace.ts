@@ -18,7 +18,7 @@ export function useWorkspace({
   setNotice: (message: string) => void;
 }) {
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
-  const [filters, setFilters] = useState(defaultFilters);
+  const [filters, setFiltersState] = useState(defaultFilters);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [matchesPage, setMatchesPage] = useState(1);
@@ -27,6 +27,7 @@ export function useWorkspace({
   const [detailTab, setDetailTab] = useState<DetailTab>("overview");
   const [statuses, setStatuses] = useState<StatusRecord[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [filterOptions, setFilterOptions] = useState({ sources: [] as string[], countries: [] as string[], keywords: [] as string[], disciplines: [] as string[], career_stages: [] as string[] });
   const [reminderForm, setReminderForm] = useState({ opportunity_id: "", remind_on: "", message: "" });
   const selectedStatusIds = useMemo(
     () => new Set(statuses.filter((record) => reminderStatuses.includes(record.status)).map((record) => record.opportunity_id)),
@@ -50,11 +51,18 @@ export function useWorkspace({
         offset,
       };
       const catalogPromise = api.opportunities(opportunityQuery);
+      void loadFilterOptions();
       if (token && profile) {
         const recommendationPromise = api
           .recommendations(token, profile.id, {
             min_score: nextFilters.min_score,
             include_ignored: nextFilters.include_ignored,
+            keyword: nextFilters.keyword,
+            opportunity_type: nextFilters.opportunity_type,
+            country: nextFilters.country,
+            career_stage: nextFilters.career_stage,
+            source: nextFilters.source,
+            active_only: nextFilters.active_only,
             limit,
             offset,
           })
@@ -86,13 +94,14 @@ export function useWorkspace({
     }
   }
 
-  function resetFilters() {
-    setFilters(defaultFilters);
-    void refreshWorkspace(activeProfile, defaultFilters, 1);
+  function setFilters(nextFilters: typeof defaultFilters) {
+    setFiltersState(nextFilters);
+    void refreshWorkspace(activeProfile, nextFilters, 1);
   }
 
-  function applyFilters() {
-    void refreshWorkspace(activeProfile, filters, 1);
+  function resetFilters() {
+    setFiltersState(defaultFilters);
+    void refreshWorkspace(activeProfile, defaultFilters, 1);
   }
 
   function goToMatchesPage(page: number) {
@@ -107,6 +116,15 @@ export function useWorkspace({
     setSelectedOpportunity(null);
     setMatchesPage(1);
     setMatchesHasNextPage(false);
+  }
+
+  async function loadFilterOptions(force = false) {
+    if (!force && (filterOptions.sources.length || filterOptions.countries.length || filterOptions.keywords.length)) return;
+    try {
+      setFilterOptions(await api.opportunityOptions());
+    } catch {
+      // Filter suggestions are optional; the page can still render from loaded opportunities.
+    }
   }
 
   async function updateStatus(opportunityId: number, status: OpportunityStatus) {
@@ -176,6 +194,7 @@ export function useWorkspace({
     detailTab,
     statuses,
     reminders,
+    filterOptions,
     reminderForm,
     selectedStatusIds,
     setFilters,
@@ -185,9 +204,9 @@ export function useWorkspace({
     setReminderForm,
     refreshWorkspace,
     resetFilters,
-    applyFilters,
     goToMatchesPage,
     clearWorkspace,
+    loadFilterOptions,
     updateStatus,
     createReminder,
     completeReminder,

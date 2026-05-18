@@ -28,6 +28,10 @@ class UserVerifyEmail(BaseModel):
     token: str = Field(..., min_length=20)
 
 
+class AuthProviderConfigRead(BaseModel):
+    orcid_oauth_enabled: bool
+
+
 class UserRead(BaseModel):
     id: int
     email: EmailStr
@@ -35,6 +39,9 @@ class UserRead(BaseModel):
     role: UserRole
     is_active: bool
     email_verified: bool
+    auth_provider: str = "local"
+    orcid_id: str | None = None
+    password_login_enabled: bool = True
 
     model_config = {"from_attributes": True}
 

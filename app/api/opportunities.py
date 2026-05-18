@@ -1,8 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.dependencies import require_admin
+from app.db.models import Opportunity, User
 from app.db.session import get_db
 from app.modules.opportunities.mappers import to_opportunity_preview, to_opportunity_read
+from app.services.serialization import unpack_list
 from app.repositories import opportunities as opportunity_repository
 from app.schemas.opportunities import (
     OpportunityBulkImportRequest,
@@ -12,13 +15,18 @@ from app.schemas.opportunities import (
 )
 from app.services import opportunities as opportunity_service
 from app.services.opportunity_search import list_opportunities_with_search
+from app.services.source_quality import is_generic_provider_reference
 
 
 router = APIRouter(prefix="/opportunities", tags=["opportunities"])
 
 
 @router.post("", response_model=OpportunityRead, status_code=status.HTTP_201_CREATED)
-def create_opportunity(payload: OpportunityCreate, db: Session = Depends(get_db)) -> OpportunityRead:
+def create_opportunity(
+    payload: OpportunityCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+) -> OpportunityRead:
     try:
         opportunity = opportunity_service.create_opportunity(db, payload)
     except opportunity_service.DuplicateOpportunityError as exc:
@@ -52,10 +60,32 @@ def list_opportunities(
     return [to_opportunity_read(opportunity) for opportunity in opportunities]
 
 
+@router.get("/options")
+def opportunity_filter_options(db: Session = Depends(get_db)) -> dict[str, list[str]]:
+    rows = db.query(
+        Opportunity.source,
+        Opportunity.title,
+        Opportunity.url,
+        Opportunity.countries,
+        Opportunity.keywords,
+        Opportunity.disciplines,
+        Opportunity.career_stages,
+    ).all()
+    rows = [row for row in rows if not is_generic_provider_reference(row.source, row.title, row.url)]
+    return {
+        "sources": _sorted_unique(row.source for row in rows),
+        "countries": _sorted_unique(value for row in rows for value in unpack_list(row.countries)),
+        "keywords": _sorted_unique(value for row in rows for value in unpack_list(row.keywords)),
+        "disciplines": _sorted_unique(value for row in rows for value in unpack_list(row.disciplines)),
+        "career_stages": _sorted_unique(value for row in rows for value in unpack_list(row.career_stages)),
+    }
+
+
 @router.post("/bulk-import", response_model=OpportunityBulkImportResult)
 def bulk_import_opportunities(
     payload: OpportunityBulkImportRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
 ) -> OpportunityBulkImportResult:
     result = opportunity_service.bulk_import_opportunities(
         db,
@@ -78,3 +108,7 @@ def get_opportunity(opportunity_id: int, db: Session = Depends(get_db)) -> Oppor
     if opportunity is None:
         raise HTTPException(status_code=404, detail="Opportunity not found")
     return to_opportunity_read(opportunity)
+
+
+def _sorted_unique(values) -> list[str]:
+    return sorted({str(value).strip() for value in values if str(value).strip()})

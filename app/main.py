@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 import logging
+from threading import Thread
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +16,28 @@ from app.services.realtime_notifications import start_redis_notification_listene
 
 
 logger = logging.getLogger(__name__)
+
+
+def _prewarm_embedding_provider() -> None:
+    if not settings.embedding_prewarm_on_startup:
+        return
+
+    def load_provider() -> None:
+        logger.info("embedding provider prewarm start provider=%s model=%s", settings.embedding_provider, settings.embedding_model_name)
+        try:
+            from app.services.embeddings import get_embedding_provider
+
+            provider = get_embedding_provider()
+            logger.info(
+                "embedding provider prewarm complete provider=%s model=%s dimensions=%s",
+                provider.name,
+                provider.model_name,
+                provider.dimensions,
+            )
+        except Exception:
+            logger.exception("embedding provider prewarm failed")
+
+    Thread(target=load_provider, name="embedding-prewarm", daemon=True).start()
 
 
 def create_app() -> FastAPI:
@@ -40,6 +63,7 @@ def create_app() -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(application: FastAPI):
+        _prewarm_embedding_provider()
         start_redis_notification_listener(application)
         try:
             yield

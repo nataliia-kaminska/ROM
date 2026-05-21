@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import date, datetime
 import logging
 from time import perf_counter
 from typing import Protocol
@@ -32,6 +33,15 @@ class RecommendationQuery:
     country: str | None = None
     career_stage: str | None = None
     active_only: bool = True
+    sort_by: str = "match_score"
+    sort_order: str = "desc"
+    exact_total: bool = False
+
+
+@dataclass(frozen=True)
+class RecommendationPage:
+    items: list[RecommendationRead]
+    total: int
 
 
 class CandidateSelector(Protocol):
@@ -53,7 +63,11 @@ class SqliteAllCandidateSelector:
         details: ResearcherProfileDetails | None,
         query: RecommendationQuery,
     ) -> list[Opportunity]:
-        candidate_limit = max(settings.semantic_candidate_limit, query.offset + query.limit)
+        candidate_limit = (
+            max(settings.semantic_candidate_limit, query.offset + query.limit)
+            if query.exact_total
+            else max(query.offset + query.limit, min(settings.semantic_candidate_limit, query.offset + max(query.limit * 3, 60)))
+        )
         return opportunity_repository.list_opportunities(
             db,
             source=query.source,
@@ -62,6 +76,8 @@ class SqliteAllCandidateSelector:
             career_stage=query.career_stage,
             keyword=query.keyword,
             active_only=query.active_only,
+            sort_by=_catalog_sort_by(query.sort_by),
+            sort_order=query.sort_order,
             limit=candidate_limit,
             offset=0,
         )
@@ -123,6 +139,16 @@ def list_recommendations(
     query: RecommendationQuery,
     selector: CandidateSelector | None = None,
 ) -> list[RecommendationRead]:
+    fast_query = RecommendationQuery(**{**query.__dict__, "exact_total": False})
+    return list_recommendations_page(db, profile, fast_query, selector).items
+
+
+def list_recommendations_page(
+    db: Session,
+    profile: ResearcherProfile,
+    query: RecommendationQuery,
+    selector: CandidateSelector | None = None,
+) -> RecommendationPage:
     started_at = perf_counter()
     logger.info(
         "recommendations start profile_id=%s min_score=%s include_ignored=%s limit=%s offset=%s",
@@ -158,6 +184,7 @@ def list_recommendations(
     opportunities_by_id = {opportunity.id: opportunity for opportunity in opportunities}
     history_signals = build_history_signals(status_records, opportunities_by_id)
     recommendations = []
+    missing_embedding_count = 0
     scoring_started_at = perf_counter()
     for opportunity in opportunities:
         item_started_at = perf_counter()
@@ -170,6 +197,8 @@ def list_recommendations(
             continue
 
         scored = score_opportunity(profile, opportunity, details, status_record, history_signals, profile_vector)
+        if scored.breakdown.semantic == 0 and not opportunity.opportunity_embedding:
+            missing_embedding_count += 1
         if scored.final_score < query.min_score:
             continue
 
@@ -198,7 +227,7 @@ def list_recommendations(
         )
 
     db.commit()
-    sorted_recommendations = sorted(recommendations, key=lambda item: item.match_score, reverse=True)
+    sorted_recommendations = _sort_recommendations(recommendations, query.sort_by, query.sort_order)
     page = sorted_recommendations[query.offset : query.offset + query.limit]
     logger.info(
         "recommendations complete profile_id=%s candidates=%s scored=%s returned=%s scoring_ms=%.2f total_ms=%.2f",
@@ -209,4 +238,31 @@ def list_recommendations(
         (perf_counter() - scoring_started_at) * 1000,
         (perf_counter() - started_at) * 1000,
     )
-    return page
+    if missing_embedding_count:
+        logger.info(
+            "recommendations used eligibility/history fallback for opportunities without embeddings profile_id=%s missing_embeddings=%s",
+            profile.id,
+            missing_embedding_count,
+        )
+    return RecommendationPage(items=page, total=len(sorted_recommendations))
+
+
+def _sort_recommendations(recommendations: list[RecommendationRead], sort_by: str, sort_order: str) -> list[RecommendationRead]:
+    reverse = sort_order == "desc"
+    if sort_by == "deadline":
+        return sorted(recommendations, key=lambda item: (item.opportunity.deadline is None, item.opportunity.deadline or date.max), reverse=reverse)
+    if sort_by == "created_at":
+        return sorted(recommendations, key=lambda item: item.opportunity.created_at or datetime.min, reverse=reverse)
+    if sort_by == "title":
+        return sorted(recommendations, key=lambda item: item.opportunity.title.casefold(), reverse=reverse)
+    if sort_by == "source":
+        return sorted(recommendations, key=lambda item: (item.opportunity.source.casefold(), item.opportunity.title.casefold()), reverse=reverse)
+    if sort_by == "readiness_score":
+        return sorted(recommendations, key=lambda item: item.readiness_score, reverse=reverse)
+    if sort_by == "semantic_score":
+        return sorted(recommendations, key=lambda item: item.semantic_score, reverse=reverse)
+    return sorted(recommendations, key=lambda item: item.match_score, reverse=reverse)
+
+
+def _catalog_sort_by(sort_by: str) -> str:
+    return sort_by if sort_by in {"deadline", "created_at", "title", "source"} else "deadline"

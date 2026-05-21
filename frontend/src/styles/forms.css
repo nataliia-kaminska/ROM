@@ -138,6 +138,14 @@ textarea {
   margin-top: var(--space-1);
 }
 
+.suggestions-focus-only {
+  display: none;
+}
+
+.field:focus-within > .suggestions-focus-only {
+  display: flex;
+}
+
 .suggestions button {
   background: var(--panel);
 }

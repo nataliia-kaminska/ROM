@@ -17,6 +17,8 @@ def _facts() -> AdvisorFacts:
         checklist=["Confirm eligibility.", "Draft fit statement."],
         motivation_outline=["Connect AI to fellowship goals."],
         fit_statement="Ada has a credible AI fit.",
+        retrieved_context=["Opportunity: AI Fellowship. Evidence: fellowship for applied AI."],
+        web_research=[],
     )
 
 
@@ -24,8 +26,20 @@ def test_deterministic_advisor_memo_uses_structured_facts():
     memo = deterministic_advisor_memo(_facts())
 
     assert "AI Fellowship" in memo
-    assert "72% readiness" in memo
     assert "Add publication highlights" in memo
+    assert "Best angle" in memo
+    assert "Reviewer concerns" in memo
+    assert "Draft snippets" in memo
+
+
+def test_deterministic_advisor_memo_prefers_web_research_for_official_checks():
+    facts = _facts()
+    facts.web_research = ["Web research: Official AI Fellowship call. Applicants must confirm host rules. Source: https://example.org/call"]
+
+    memo = deterministic_advisor_memo(facts)
+
+    assert "Official AI Fellowship call" in memo
+    assert "Draft snippets" in memo
 
 
 def test_groq_provider_falls_back_without_api_key(monkeypatch):
@@ -34,7 +48,7 @@ def test_groq_provider_falls_back_without_api_key(monkeypatch):
     memo = GroqAdvisorProvider().generate_memo(_facts())
 
     assert "AI Fellowship" in memo
-    assert "Recommended next actions" in memo
+    assert "Best angle" in memo
 
 
 def test_groq_provider_falls_back_on_network_failure(monkeypatch):
@@ -48,4 +62,4 @@ def test_groq_provider_falls_back_on_network_failure(monkeypatch):
     memo = GroqAdvisorProvider().generate_memo(_facts())
 
     assert "AI Fellowship" in memo
-    assert "Recommended next actions" in memo
+    assert "Best angle" in memo

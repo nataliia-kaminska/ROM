@@ -21,3 +21,10 @@ class RecommendationRead(BaseModel):
     gaps: list[str] = Field(default_factory=list)
     strengths: list[str] = Field(default_factory=list)
     user_status: str | None = None
+
+
+class RecommendationListResponse(BaseModel):
+    items: list[RecommendationRead] = Field(default_factory=list)
+    total: int = 0
+    limit: int = 50
+    offset: int = 0

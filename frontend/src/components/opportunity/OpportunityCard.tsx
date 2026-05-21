@@ -1,6 +1,6 @@
 import type React from "react";
 import type { OpportunityStatus, Recommendation } from "../../types";
-import { label } from "../../utils/format";
+import { label, opportunitySummary } from "../../utils/format";
 
 export function OpportunityCard({
   item,
@@ -35,11 +35,11 @@ export function OpportunityCard({
         <span className="deadline-pill">{item.opportunity.deadline ?? "No deadline"}</span>
       </div>
       <h3>{item.opportunity.title}</h3>
-      <p className="card-summary">{item.opportunity.summary || "No summary provided."}</p>
+      <p className="card-summary">{opportunitySummary(item.opportunity)}</p>
       <div className="chips">
         <span>{label(item.opportunity.opportunity_type)}</span>
         <span>{item.opportunity.source}</span>
-        {item.user_status && <span>{label(item.user_status)}</span>}
+        {item.user_status && <span className={`status-chip status-${item.user_status}`}>{label(item.user_status)}</span>}
       </div>
       {topReasons.length > 0 && (
         <ul className="reasons">

@@ -36,6 +36,13 @@ class SourceQualityRead(BaseModel):
     saved_count: int
 
 
+class AdminHealthCheckRead(BaseModel):
+    name: str
+    status: str
+    detail: str
+    latency_ms: float | None = None
+
+
 class AdminAnalyticsRead(BaseModel):
     total_opportunities: int
     total_profiles: int
@@ -51,3 +58,4 @@ class AdminDashboardRead(BaseModel):
     recent_batches: list[IngestionBatchRead]
     failed_batches: list[IngestionBatchRead]
     analytics: AdminAnalyticsRead
+    health: list[AdminHealthCheckRead]

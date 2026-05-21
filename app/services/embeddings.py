@@ -234,7 +234,7 @@ def ensure_opportunity_embedding(opportunity: Opportunity, *, allow_backfill: bo
     if existing and opportunity.embedding_model == provider.model_name:
         return existing
     if not allow_backfill:
-        logger.info(
+        logger.debug(
             "opportunity embedding cache miss without backfill opportunity_id=%s source=%s model=%s target_model=%s",
             opportunity.id,
             opportunity.source,

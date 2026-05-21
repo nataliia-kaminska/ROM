@@ -112,7 +112,7 @@ export function AppShell({
   onLogout: () => void;
   children: ReactNode;
 }) {
-  const title = view === "about" ? "Research Opportunity Matcher" : activeProfile ? profileLabel(activeProfile, user?.email) : isGuest ? "Browse opportunities" : "Create your first profile";
+  const title = view === "about" ? "Research Opportunity Matcher" : view === "opportunity" ? "Opportunity details" : activeProfile ? profileLabel(activeProfile, user?.email) : isGuest ? "Browse opportunities" : "Create your first profile";
   const accountIdentity = user?.auth_provider === "orcid" && user.orcid_id ? `ORCID ${user.orcid_id}` : user?.email;
   return (
     <main className="app-shell">

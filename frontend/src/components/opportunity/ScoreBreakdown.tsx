@@ -1,10 +1,11 @@
 import type { Recommendation } from "../../types";
 
-export function ScoreBreakdown({ item }: { item: Pick<Recommendation, "score_breakdown"> }) {
+export function ScoreBreakdown({ item }: { item: Pick<Recommendation, "readiness_score" | "score_breakdown"> }) {
   const entries = [
-    ["Semantic", item.score_breakdown.semantic, "Topic and text similarity between your profile and the opportunity."],
+    ["Topic", item.score_breakdown.semantic, "Topic and text similarity between your profile and the opportunity."],
     ["Eligibility", item.score_breakdown.eligibility, "Fit against career stage, country, parsed requirements, and profile details."],
     ["Deadline", item.score_breakdown.deadline, "Boost for opportunities that are active and actionable soon."],
+    ["Readiness", item.readiness_score, "How complete your current profile evidence is for this opportunity."],
     ["History", item.score_breakdown.user_history, "Learns from opportunities you saved, planned, applied to, or ignored."],
   ] as const;
   return (

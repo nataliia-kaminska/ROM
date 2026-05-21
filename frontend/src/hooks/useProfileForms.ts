@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { api, type ProfileDetailsPayload, type ProfilePayload } from "../api";
-import { blankDetails, blankProfile } from "../constants";
-import type { CareerStage, Profile, User } from "../types";
+import { blankDetails, blankProfile, defaultFilters } from "../constants";
+import type { CareerStage, OpenAlexPreview, Profile, User } from "../types";
 import { normalizeText, normalizeUrl, splitList } from "../utils/format";
 
 export function useProfileForms({
@@ -23,7 +23,7 @@ export function useProfileForms({
   setError: (message: string) => void;
   setNotice: (message: string) => void;
   loadSession: (token?: string | null, preferredProfileId?: number | null) => Promise<void>;
-  refreshWorkspace: (profile?: Profile | null) => Promise<void>;
+  refreshWorkspace: (profile?: Profile | null, nextFilters?: typeof defaultFilters, page?: number, options?: { force?: boolean }) => Promise<void>;
 }) {
   const [profileForm, setProfileForm] = useState<ProfilePayload>(blankProfile);
   const [detailsForm, setDetailsForm] = useState<ProfileDetailsPayload>(blankDetails);
@@ -35,6 +35,7 @@ export function useProfileForms({
     preferred_countries: "",
   });
   const [openAlexForm, setOpenAlexForm] = useState({ openalex_author_id: "", orcid_id: "", max_works: 10 });
+  const [openAlexPreview, setOpenAlexPreview] = useState<OpenAlexPreview | null>(null);
 
   useEffect(() => {
     if (!activeProfile) {
@@ -94,7 +95,7 @@ export function useProfileForms({
       setNotice(activeProfile ? "Profile updated" : "Profile created");
       setActiveProfileId(profile.id);
       await loadSession(token, profile.id);
-      await refreshWorkspace(profile);
+      await refreshWorkspace(profile, undefined, undefined, { force: true });
     } catch (profileError) {
       setError((profileError as Error).message);
     } finally {
@@ -131,7 +132,7 @@ export function useProfileForms({
     try {
       await api.saveProfileDetails(token, activeProfile.id, detailsForm);
       setNotice("Profile details saved");
-      await refreshWorkspace(activeProfile);
+      await refreshWorkspace(activeProfile, undefined, undefined, { force: true });
     } catch (detailsError) {
       setError((detailsError as Error).message);
     } finally {
@@ -162,8 +163,8 @@ export function useProfileForms({
     }
   }
 
-  async function importOpenAlex(event: FormEvent) {
-    event.preventDefault();
+  async function importOpenAlex(event?: FormEvent) {
+    event?.preventDefault();
     if (!token || !activeProfile) return;
     setLoading(true);
     setError("");
@@ -174,10 +175,32 @@ export function useProfileForms({
         orcid_id: normalizeText(openAlexForm.orcid_id) ?? activeProfile.orcid_id,
         max_works: openAlexForm.max_works,
       });
+      setOpenAlexPreview(null);
       setNotice("OpenAlex profile data imported");
       await loadSession(token);
       await loadDetails();
-      await refreshWorkspace(activeProfile);
+      await refreshWorkspace(activeProfile, undefined, undefined, { force: true });
+    } catch (openAlexError) {
+      setError((openAlexError as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function previewOpenAlex(event: FormEvent) {
+    event.preventDefault();
+    if (!token || !activeProfile) return;
+    setLoading(true);
+    setError("");
+    try {
+      const preview = await api.previewOpenAlex(token, {
+        profile_id: activeProfile.id,
+        openalex_author_id: normalizeText(openAlexForm.openalex_author_id),
+        orcid_id: normalizeText(openAlexForm.orcid_id) ?? activeProfile.orcid_id,
+        max_works: openAlexForm.max_works,
+      });
+      setOpenAlexPreview(preview);
+      setNotice("OpenAlex preview ready");
     } catch (openAlexError) {
       setError((openAlexError as Error).message);
     } finally {
@@ -190,6 +213,7 @@ export function useProfileForms({
     detailsForm,
     orcidForm,
     openAlexForm,
+    openAlexPreview,
     setProfileForm,
     setDetailsForm,
     setOrcidForm,
@@ -199,5 +223,6 @@ export function useProfileForms({
     saveDetails,
     importOrcid,
     importOpenAlex,
+    previewOpenAlex,
   };
 }

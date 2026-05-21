@@ -260,6 +260,11 @@ def _score_details(
         score += min(12, 3 * len(text_matches))
         reasons.append(f"Profile text overlaps with opportunity: {', '.join(text_matches[:4])}")
 
+    publication_matches = _publication_overlap_terms(details, opportunity)
+    if publication_matches:
+        score += min(10, 4 * len(publication_matches))
+        reasons.append(f"Publication evidence supports this match: {', '.join(publication_matches[:3])}")
+
     return score
 
 
@@ -284,6 +289,24 @@ def _text_overlap_terms(details: ResearcherProfileDetails, opportunity: Opportun
     profile_terms = _meaningful_terms(profile_text)
     opportunity_terms = _meaningful_terms(opportunity_text)
     return sorted(profile_terms & opportunity_terms)
+
+
+def _publication_overlap_terms(details: ResearcherProfileDetails, opportunity: Opportunity) -> list[str]:
+    publication_terms = _meaningful_terms(" ".join(unpack_list(details.publications)))
+    if not publication_terms:
+        return []
+    opportunity_terms = _meaningful_terms(
+        " ".join(
+            [
+                opportunity.title,
+                opportunity.summary,
+                opportunity.eligibility,
+                opportunity.keywords,
+                opportunity.disciplines,
+            ]
+        )
+    )
+    return sorted(publication_terms & opportunity_terms)
 
 
 def _meaningful_terms(text: str) -> set[str]:

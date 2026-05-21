@@ -219,6 +219,7 @@ export function AdminView({
   onLoadAdminOps: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<AdminTab>("sources");
+  const healthChecks = adminHealthChecks(adminData);
 
   return (
     <section className="panel admin-page">
@@ -450,6 +451,20 @@ export function AdminView({
             </div>
             <ActionButton variant="secondary" type="button" busy={adminBusy === "operations"} onClick={onLoadAdminOps}>Load operations</ActionButton>
           </div>
+          {healthChecks.length > 0 && (
+            <div className="health-grid">
+              {healthChecks.map((check) => (
+                <article className={`health-card health-${check.status}`} key={check.name}>
+                  <div>
+                    <strong>{check.name}</strong>
+                    <span>{check.status}</span>
+                  </div>
+                  <p>{check.detail}</p>
+                  {typeof check.latency_ms === "number" && <small>{check.latency_ms} ms</small>}
+                </article>
+              ))}
+            </div>
+          )}
           <div className="admin-output-grid">
             {adminData && <pre className="job-detail">{JSON.stringify(adminData, null, 2)}</pre>}
             {duplicateGroups.length > 0 && <pre className="job-detail">{JSON.stringify(duplicateGroups, null, 2)}</pre>}
@@ -469,4 +484,25 @@ function adminTabLabel(tab: AdminTab): string {
     operations: "Operations",
   };
   return labels[tab];
+}
+
+type HealthCheck = { name: string; status: string; detail: string; latency_ms?: number | null };
+
+function adminHealthChecks(adminData: Record<string, unknown> | null): HealthCheck[] {
+  const health = adminData?.health;
+  if (!Array.isArray(health)) return [];
+  return health.filter(isHealthCheck);
+}
+
+function isHealthCheck(value: unknown): value is HealthCheck {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "name" in value &&
+    "status" in value &&
+    "detail" in value &&
+    typeof (value as HealthCheck).name === "string" &&
+    typeof (value as HealthCheck).status === "string" &&
+    typeof (value as HealthCheck).detail === "string"
+  );
 }

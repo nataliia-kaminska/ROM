@@ -7,8 +7,7 @@ export const trackedStatuses: OpportunityStatus[] = ["saved", "planned", "applie
 export const reminderStatuses: OpportunityStatus[] = ["saved", "planned"];
 export const researcherViews = ["about", "dashboard", "feed", "profile", "board", "assistant", "reminders", "notifications"] as const;
 
-export type View = "dashboard" | "feed" | "profile" | "board" | "reminders" | "notifications" | "assistant" | "about" | "verify_email" | "orcid_callback" | "admin";
-export type DetailTab = "overview" | "reasons" | "eligibility" | "assistant" | "reminders";
+export type View = "dashboard" | "feed" | "profile" | "board" | "reminders" | "notifications" | "assistant" | "about" | "verify_email" | "orcid_callback" | "admin" | "opportunity";
 
 export const viewRoutes: Record<View, string> = {
   dashboard: "/dashboard",
@@ -22,12 +21,19 @@ export const viewRoutes: Record<View, string> = {
   reminders: "/reminders",
   notifications: "/notifications",
   admin: "/admin",
+  opportunity: "/opportunities",
 };
 
 const routeViews = Object.fromEntries(Object.entries(viewRoutes).map(([view, path]) => [path, view])) as Record<string, View>;
 
 export function viewFromPath(pathname: string): View {
+  if (/^\/opportunities\/\d+$/.test(pathname)) return "opportunity";
   return routeViews[pathname] ?? "dashboard";
+}
+
+export function opportunityIdFromPath(pathname: string): number | null {
+  const match = pathname.match(/^\/opportunities\/(\d+)$/);
+  return match ? Number(match[1]) : null;
 }
 
 export const defaultFilters = {
@@ -39,6 +45,9 @@ export const defaultFilters = {
   active_only: true,
   min_score: 0,
   include_ignored: false,
+  status_filter: "visible",
+  sort_by: "match_score",
+  sort_order: "desc",
 };
 
 export const blankProfile: ProfilePayload = {
@@ -78,12 +87,4 @@ export const blankOpportunity: OpportunityPayload = {
   countries: [],
   career_stages: [],
   deadline: null,
-};
-
-export const detailTabLabels: Record<DetailTab, string> = {
-  overview: "Overview",
-  reasons: "Why it matches",
-  eligibility: "Requirements",
-  assistant: "Apply plan",
-  reminders: "Reminders",
 };

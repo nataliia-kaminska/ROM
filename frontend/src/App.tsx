@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { api } from "./api";
 import { OpportunityDrawer } from "./components/opportunities";
 import { AppShell, AuthScreen } from "./components/layout";
 import { useAdminOps } from "./hooks/useAdminOps";
@@ -10,14 +11,16 @@ import { useSession } from "./hooks/useSession";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { useWorkspaceSelectors } from "./hooks/useWorkspaceSelectors";
 import { WorkspaceRoutes } from "./routes/WorkspaceRoutes";
+import type { Opportunity } from "./types";
 import { OrcidCallbackView } from "./views/OrcidCallbackView";
 import { VerifyEmailView } from "./views/VerifyEmailView";
 
 function App() {
-  const { view, navigateTo } = useAppRoute();
+  const { view, opportunityId, navigateTo, navigateToOpportunity } = useAppRoute();
   const [notice, setNotice] = useState("");
   const [guestMode, setGuestMode] = useState(false);
   const [profileHighlights, setProfileHighlights] = useState<string[]>([]);
+  const [routeOpportunity, setRouteOpportunity] = useState<Opportunity | null>(null);
 
   const {
     token,
@@ -108,20 +111,30 @@ function App() {
     detailsForm: profile.detailsForm,
     assistantResult: assistant.assistantResult,
   });
+  const routeOpportunitiesById = new Map(opportunitiesById);
+  if (routeOpportunity) {
+    routeOpportunitiesById.set(routeOpportunity.id, routeOpportunity);
+  }
 
   useEffect(() => {
     void loadSession();
   }, []);
 
   useEffect(() => {
-    const workspaceViews = new Set(["dashboard", "feed", "board", "assistant", "reminders"]);
+    if (!token && !user && !guestMode && ["about", "opportunity"].includes(view)) {
+      setGuestMode(true);
+    }
+  }, [guestMode, token, user, view]);
+
+  useEffect(() => {
+    const workspaceViews = new Set(["dashboard", "feed", "board", "assistant", "reminders", "opportunity"]);
     if ((token || guestMode) && workspaceViews.has(view)) {
       void workspace.refreshWorkspace(activeProfile, workspace.filters, 1);
     }
   }, [token, guestMode, activeProfileId, view]);
 
   useEffect(() => {
-    const guestViews = new Set(["about", "feed"]);
+    const guestViews = new Set(["about", "feed", "opportunity"]);
     if (guestMode && !guestViews.has(view)) {
       navigateTo("feed", true);
       return;
@@ -131,6 +144,30 @@ function App() {
       navigateTo("dashboard", true);
     }
   }, [guestMode, token, user, view]);
+
+  useEffect(() => {
+    if (view !== "opportunity" || !opportunityId) {
+      setRouteOpportunity(null);
+      return;
+    }
+    if (opportunitiesById.has(opportunityId)) {
+      setRouteOpportunity(null);
+      return;
+    }
+    if (routeOpportunity?.id === opportunityId) return;
+    let cancelled = false;
+    api
+      .opportunity(opportunityId)
+      .then((opportunity) => {
+        if (!cancelled) setRouteOpportunity(opportunity);
+      })
+      .catch((detailsError) => {
+        if (!cancelled) setError((detailsError as Error).message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [view, opportunityId, opportunitiesById, routeOpportunity?.id, setError]);
 
   useEffect(() => {
     if (!notice) return;
@@ -187,7 +224,7 @@ function App() {
       onLogout={handleLogout}
     >
       <WorkspaceRoutes
-        route={{ view, onViewChange: navigateTo }}
+        route={{ view, opportunityId, onViewChange: navigateTo }}
         workspace={{
           activeProfile,
           isSignedIn: Boolean(token && user),
@@ -197,6 +234,8 @@ function App() {
           opportunities: workspace.opportunities,
           matchesPage: workspace.matchesPage,
           matchesHasNextPage: workspace.matchesHasNextPage,
+          matchesTotalPages: workspace.matchesTotalPages,
+          matchesTotalIsEstimate: workspace.matchesTotalIsEstimate,
           statuses: workspace.statuses,
           reminders: workspace.reminders,
           reminderForm: workspace.reminderForm,
@@ -204,7 +243,7 @@ function App() {
           topMatches,
           plannedStatuses,
           nextReminder,
-          opportunitiesById,
+          opportunitiesById: routeOpportunitiesById,
           reminderEligibleOpportunities,
           sourceOptions: workspace.filterOptions.sources.length ? workspace.filterOptions.sources : sourceOptions,
           countryOptions: workspace.filterOptions.countries.length ? workspace.filterOptions.countries : countryOptions,
@@ -228,6 +267,7 @@ function App() {
           detailsForm: profile.detailsForm,
           orcidForm: profile.orcidForm,
           openAlexForm: profile.openAlexForm,
+          openAlexPreview: profile.openAlexPreview,
           onProfileChange: profile.setProfileForm,
           onDetailsChange: profile.setDetailsForm,
           onLoadDetails: () => void profile.loadDetails(),
@@ -238,6 +278,7 @@ function App() {
           onOpenAlexChange: profile.setOpenAlexForm,
           onImportOrcid: profile.importOrcid,
           onImportOpenAlex: profile.importOpenAlex,
+          onPreviewOpenAlex: profile.previewOpenAlex,
         }}
         notifications={{
           notifications: notifications.notifications,
@@ -250,6 +291,7 @@ function App() {
         assistant={{
           assistantForm: assistant.assistantForm,
           assistantResult: assistant.assistantResult,
+          assistantLoading: assistant.assistantLoading,
           onAssistantFormChange: assistant.setAssistantForm,
           onGenerateAssistant: assistant.generateApplicationNotes,
         }}
@@ -292,12 +334,15 @@ function App() {
           assistantResult={assistant.assistantResult}
           selectedStatusIds={selectedStatusIds}
           statusByOpportunity={statusByOpportunity}
-          detailTab={workspace.detailTab}
-          setDetailTab={workspace.setDetailTab}
+          canTrack={Boolean(activeProfile)}
           onClose={() => workspace.setSelectedOpportunity(null)}
           onStatus={(opportunityId, status) => void workspace.updateStatus(opportunityId, status)}
           setAssistantForm={assistant.setAssistantForm}
           setView={navigateTo}
+          onOpenFullDetails={(opportunityId) => {
+            workspace.setSelectedOpportunity(null);
+            navigateToOpportunity(opportunityId);
+          }}
         />
       )}
     </AppShell>

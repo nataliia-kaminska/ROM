@@ -20,9 +20,10 @@ def test_requirement_parser_extracts_structured_signals():
     assert requirements.confidence >= 60
 
 
-def test_opportunity_read_exposes_extracted_requirements(client):
+def test_opportunity_read_exposes_extracted_requirements(client, admin_headers):
     response = client.post(
         "/opportunities",
+        headers=admin_headers,
         json={
             "title": "DAAD Doctoral Fellowship",
             "opportunity_type": "fellowship",
@@ -41,7 +42,7 @@ def test_opportunity_read_exposes_extracted_requirements(client):
     assert "Germany" in body["extracted_requirements"]["countries"]
 
 
-def test_ai_requirement_extraction_enriches_database_metadata(client, monkeypatch):
+def test_ai_requirement_extraction_enriches_database_metadata(client, monkeypatch, admin_headers):
     class FakeResponse:
         def raise_for_status(self):
             return None
@@ -78,6 +79,7 @@ def test_ai_requirement_extraction_enriches_database_metadata(client, monkeypatc
 
     response = client.post(
         "/opportunities",
+        headers=admin_headers,
         json={
             "title": "Clinical AI Fellowship",
             "opportunity_type": "fellowship",
@@ -156,7 +158,7 @@ def test_ai_extraction_can_polish_public_card_fields(monkeypatch):
     assert opportunity.requirements_confidence == 84
 
 
-def test_recommendations_use_extracted_requirements_when_metadata_is_sparse(client):
+def test_recommendations_use_extracted_requirements_when_metadata_is_sparse(client, admin_headers):
     profile = client.post(
         "/profiles",
         json={
@@ -168,6 +170,7 @@ def test_recommendations_use_extracted_requirements_when_metadata_is_sparse(clie
     ).json()
     client.post(
         "/opportunities",
+        headers=admin_headers,
         json={
             "title": "Climate Doctoral Fellowship",
             "opportunity_type": "fellowship",
@@ -186,7 +189,7 @@ def test_recommendations_use_extracted_requirements_when_metadata_is_sparse(clie
     assert any("Eligible career stage" in reason for reason in recommendations[0]["reasons"])
 
 
-def test_application_assistant_returns_gap_analysis(client):
+def test_application_assistant_returns_gap_analysis(client, admin_headers):
     profile = client.post(
         "/profiles",
         json={
@@ -198,6 +201,7 @@ def test_application_assistant_returns_gap_analysis(client):
     ).json()
     opportunity = client.post(
         "/opportunities",
+        headers=admin_headers,
         json={
             "title": "Postdoctoral AI Fellowship",
             "opportunity_type": "fellowship",

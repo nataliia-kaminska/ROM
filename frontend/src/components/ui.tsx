@@ -79,6 +79,7 @@ export function MultiValueField({
   placeholder = "Comma-separated values",
   help,
   suggestions = [],
+  suggestionsOnFocusOnly = false,
   className = "",
 }: {
   labelText: string;
@@ -87,6 +88,7 @@ export function MultiValueField({
   placeholder?: string;
   help?: string;
   suggestions?: string[];
+  suggestionsOnFocusOnly?: boolean;
   className?: string;
 }) {
   const [draft, setDraft] = useState("");
@@ -141,7 +143,7 @@ export function MultiValueField({
         />
       </div>
       {visibleSuggestions.length > 0 && (
-        <div className="suggestions">
+        <div className={`suggestions${suggestionsOnFocusOnly ? " suggestions-focus-only" : ""}`}>
           {visibleSuggestions.map((suggestion) => (
             <button key={suggestion} type="button" onClick={() => addValue(suggestion)}>
               {suggestion}

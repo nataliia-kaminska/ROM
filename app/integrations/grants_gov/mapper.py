@@ -1,14 +1,14 @@
 from datetime import date, datetime
 from typing import Any
 
-from app.db.models import Opportunity, OpportunityType
-from app.services.serialization import pack_list
+from app.domain.enums import OpportunityType
+from app.schemas.opportunities import OpportunityCreate
 
 
 GRANTS_GOV_OPPORTUNITY_URL = "https://www.grants.gov/search-results-detail/"
 
 
-def normalize_grants_gov_hit(hit: dict[str, Any], fallback_keyword: str) -> Opportunity:
+def normalize_grants_gov_hit(hit: dict[str, Any], fallback_keyword: str) -> OpportunityCreate:
     title = _first_text(hit, "title", "opportunityTitle", "opportunity_title", "synopsisTitle")
     opportunity_id = _first_text(hit, "id", "opportunityId", "opportunity_id", "oppId")
     number = _first_text(hit, "number", "opportunityNumber", "opportunity_number")
@@ -22,17 +22,17 @@ def normalize_grants_gov_hit(hit: dict[str, Any], fallback_keyword: str) -> Oppo
     if agency:
         keywords.append(agency)
 
-    return Opportunity(
+    return OpportunityCreate(
         title=title or "Untitled Grants.gov opportunity",
         opportunity_type=OpportunityType.grant,
         source="grants.gov",
         url=url,
         summary=summary,
         eligibility=_first_text(hit, "eligibility", "applicantEligibilityDescription"),
-        disciplines=pack_list([]),
-        keywords=pack_list(keywords),
-        countries=pack_list(["United States"]),
-        career_stages=pack_list([]),
+        disciplines=[],
+        keywords=keywords,
+        countries=["United States"],
+        career_stages=[],
         deadline=close_date,
     )
 

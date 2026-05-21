@@ -96,7 +96,14 @@ def test_orcid_callback_creates_passwordless_user(client, monkeypatch):
         assert code == "auth-code"
         return {"orcid": "0000-0002-1825-0097", "name": "Ada Lovelace"}
 
+    class FakeImportResult:
+        class Profile:
+            id = 1
+
+        profile = Profile()
+
     monkeypatch.setattr(auth_api, "exchange_authorization_code", fake_exchange_authorization_code)
+    monkeypatch.setattr(auth_api, "import_orcid_profile_service", lambda *args, **kwargs: FakeImportResult())
     try:
         response = client.get(
             "/auth/orcid/callback",

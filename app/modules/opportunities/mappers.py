@@ -20,6 +20,7 @@ def to_opportunity_read(opportunity: Opportunity) -> OpportunityRead:
         countries=unpack_list(opportunity.countries),
         career_stages=unpack_list(opportunity.career_stages),
         deadline=opportunity.deadline,
+        created_at=opportunity.created_at,
         extracted_requirements=asdict(extract_opportunity_requirements(opportunity)),
         requirements_confidence=opportunity.requirements_confidence,
     )

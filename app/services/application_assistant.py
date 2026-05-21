@@ -5,6 +5,7 @@ from app.schemas.application_assistant import ApplicationAssistantRead
 from app.services.advisor_provider import AdvisorFacts, get_advisor_provider
 from app.services.requirements import build_gap_analysis, extract_opportunity_requirements
 from app.services.serialization import unpack_list
+from app.services.web_research import research_opportunity_web
 
 
 def build_application_assistant(
@@ -19,6 +20,7 @@ def build_application_assistant(
     checklist = _checklist(opportunity, warnings, retrieved_context)
     outline = _motivation_outline(profile, opportunity)
     fit_statement = _fit_statement(profile, opportunity, details, retrieved_context)
+    web_research = research_opportunity_web(opportunity)
     advisor_provider = get_advisor_provider()
     advisor_memo = advisor_provider.generate_memo(
         AdvisorFacts(
@@ -32,6 +34,7 @@ def build_application_assistant(
             warnings=warnings,
             missing_fields=missing_fields,
             retrieved_context=retrieved_context,
+            web_research=web_research,
             checklist=checklist,
             motivation_outline=outline,
             fit_statement=fit_statement,
@@ -41,7 +44,10 @@ def build_application_assistant(
     return ApplicationAssistantRead(
         opportunity_id=opportunity.id,
         profile_id=profile.id,
+        profile_name=profile.full_name,
+        opportunity_title=opportunity.title,
         retrieved_context=retrieved_context,
+        web_research=web_research,
         application_checklist=checklist,
         motivation_letter_outline=outline,
         research_fit_statement=fit_statement,
@@ -57,35 +63,48 @@ def build_application_assistant(
 
 
 def _checklist(opportunity: Opportunity, warnings: list[str], retrieved_context: list[str]) -> list[str]:
-    items = [
-        "Confirm eligibility requirements against the official source.",
-        "Prepare an updated academic CV.",
-        "Draft a one-page research fit statement.",
-        "Collect publication highlights relevant to this opportunity.",
-        "Identify referees or host contacts if required.",
-        "Review budget, mobility, or duration requirements.",
-    ]
+    requirements = extract_opportunity_requirements(opportunity)
+    items = []
+    if warnings:
+        items.append("Open the official eligibility rules and resolve the highest-risk warning before drafting.")
     if opportunity.deadline:
-        items.insert(0, f"Submit before {opportunity.deadline.isoformat()}.")
-    if opportunity.url:
-        items.append(f"Open and verify application instructions: {opportunity.url}")
+        days_left = (opportunity.deadline - date.today()).days
+        if days_left >= 0:
+            items.append(f"Block review and submission time before {opportunity.deadline.isoformat()} ({days_left} days left).")
+        else:
+            items.append(f"Confirm whether the deadline has been extended after {opportunity.deadline.isoformat()}.")
+    if requirements.required_degree:
+        items.append("Prepare a degree or qualification proof file and compare it against the call wording.")
+    if requirements.languages:
+        items.append("Prepare language evidence or a short note explaining how language requirements are satisfied.")
     requirement_snippets = [snippet for snippet in retrieved_context if snippet.startswith("Opportunity eligibility") or snippet.startswith("Extracted requirement")]
     if requirement_snippets:
-        items.insert(1, f"Use retrieved requirement evidence in the application plan: {requirement_snippets[0]}")
-    if warnings:
-        items.insert(0, "Resolve eligibility warnings before investing in the full application.")
+        items.append("Turn the extracted requirement snippets into a short document checklist.")
+    if requirements.publication_expectation:
+        items.append("Select the strongest publication or output evidence before writing the motivation paragraph.")
+    items.append("Draft one fit paragraph using the Evidence to use card as the proof source.")
+    items.append("Confirm submission documents, budget rules, and portal steps on the official call page.")
+    if opportunity.url:
+        items.append("Open the saved source link and verify that the page is the specific call, not a general search page.")
     return items
 
 
 def _motivation_outline(profile: ResearcherProfile, opportunity: Opportunity) -> list[str]:
     disciplines = ", ".join(unpack_list(profile.disciplines)[:3]) or "your research area"
     keywords = ", ".join(unpack_list(profile.keywords)[:4]) or "your current research priorities"
+    requirements = extract_opportunity_requirements(opportunity)
+    opportunity_topics = ", ".join((unpack_list(opportunity.keywords) + unpack_list(opportunity.disciplines))[:4]) or opportunity.opportunity_type.value
+    countries = ", ".join((unpack_list(opportunity.countries) or requirements.countries)[:3])
+    required_degree = requirements.required_degree or "the required qualification"
+    language_text = ", ".join(requirements.languages[:3])
+    mobility_text = requirements.mobility or (f"host country/region: {countries}" if countries else "")
     return [
-        f"Opening: introduce {profile.full_name} and the opportunity, {opportunity.title}.",
-        f"Research fit: connect {disciplines} and {keywords} to the opportunity goals.",
-        "Evidence: cite two or three publications, projects, or outcomes that show readiness.",
-        "Impact: explain what the funding, mobility, training, or position would make possible.",
-        "Close: restate fit, availability, and next-step readiness.",
+        f"Opening: name {opportunity.title} and frame {profile.full_name}'s goal in {disciplines}.",
+        f"Fit argument: connect profile keywords ({keywords}) to opportunity themes ({opportunity_topics}).",
+        f"Eligibility proof: explicitly address {required_degree}{f' and {language_text} language ability' if language_text else ''}.",
+        f"Evidence paragraph: cite the strongest publication, project, or OpenAlex-imported work linked to {opportunity_topics}.",
+        f"Impact paragraph: explain what this {opportunity.opportunity_type.value} enables for the host/community{f' and {mobility_text}' if mobility_text else ''}.",
+        "Close: state availability, readiness, and the next concrete application step.",
     ]
 
 
@@ -151,6 +170,8 @@ def _retrieve_context(
                 ("Profile funding interests", ", ".join(unpack_list(details.funding_interests))),
             ]
         )
+        for publication in _publication_evidence(details, opportunity):
+            candidates.append(("Publication evidence", publication))
     scored = []
     for label, text in candidates:
         clean = " ".join((text or "").split())
@@ -161,6 +182,24 @@ def _retrieve_context(
             score += 1
         scored.append((score, f"{label}: {_compact_snippet(clean)}"))
     return [snippet for _, snippet in sorted(scored, key=lambda item: item[0], reverse=True)[:8]]
+
+
+def _publication_evidence(details: ResearcherProfileDetails, opportunity: Opportunity) -> list[str]:
+    opportunity_text = " ".join(
+        [
+            opportunity.title,
+            opportunity.summary,
+            opportunity.eligibility,
+            opportunity.keywords,
+            opportunity.disciplines,
+        ]
+    ).lower()
+    evidence = []
+    for publication in unpack_list(details.publications):
+        publication_terms = [term for term in publication.lower().replace("-", " ").split() if len(term) > 4]
+        if any(term in opportunity_text for term in publication_terms):
+            evidence.append(publication)
+    return evidence[:3]
 
 
 def _compact_snippet(value: str, limit: int = 260) -> str:
@@ -212,9 +251,38 @@ def _eligibility_warnings(
         conflict = countries & unavailable
         if conflict:
             warnings.append(f"Opportunity conflicts with unavailable country or region: {', '.join(sorted(conflict))}.")
+        languages = {item.lower() for item in unpack_list(details.languages)}
+        required_languages = {item.lower() for item in requirements.languages}
+        missing_languages = required_languages - languages
+        if missing_languages:
+            warnings.append(f"Required language evidence may be missing: {', '.join(sorted(missing_languages))}.")
+        if requirements.publication_expectation and not unpack_list(details.publications):
+            warnings.append(f"Publication evidence is expected: {requirements.publication_expectation}")
+    if requirements.required_degree:
+        degree_text = " ".join(unpack_list(details.degrees)).lower() if details else ""
+        if requirements.required_degree.lower() not in degree_text and requirements.required_degree.lower() not in profile.career_stage.value.lower():
+            warnings.append(f"Required degree may need proof: {requirements.required_degree}.")
+    if requirements.citizenship:
+        citizenship_text = requirements.citizenship.lower()
+        profile_country = (profile.country or "").lower()
+        if profile_country and profile_country not in citizenship_text and "any" not in citizenship_text and "global" not in citizenship_text:
+            warnings.append(f"Citizenship/residency condition needs manual check: {requirements.citizenship}.")
+    if requirements.mobility:
+        warnings.append(f"Mobility rule needs confirmation: {requirements.mobility}.")
     if opportunity.deadline and opportunity.deadline < date.today():
         warnings.append("The listed deadline has passed.")
-    return warnings
+    return _dedupe(warnings)
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        key = value.casefold()
+        if key not in seen:
+            seen.add(key)
+            result.append(value)
+    return result
 
 
 def _export_notes(

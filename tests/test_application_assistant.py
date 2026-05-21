@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 
 
-def test_application_assistant_generates_notes_and_warnings(client):
+def test_application_assistant_generates_notes_and_warnings(client, admin_headers):
     profile = client.post(
         "/profiles",
         json={
@@ -22,6 +22,7 @@ def test_application_assistant_generates_notes_and_warnings(client):
     )
     opportunity = client.post(
         "/opportunities",
+        headers=admin_headers,
         json={
             "title": "AI Fellowship",
             "opportunity_type": "fellowship",
@@ -43,6 +44,9 @@ def test_application_assistant_generates_notes_and_warnings(client):
     assert response.status_code == 200
     body = response.json()
     assert body["retrieved_context"]
+    assert body["profile_name"] == "Ada Kovalenko"
+    assert body["opportunity_title"] == "AI Fellowship"
+    assert "web_research" in body
     assert any("Opportunity" in snippet for snippet in body["retrieved_context"])
     assert body["application_checklist"]
     assert body["motivation_letter_outline"]
@@ -51,7 +55,9 @@ def test_application_assistant_generates_notes_and_warnings(client):
     assert any("Career stage" in warning for warning in body["eligibility_warnings"])
     assert body["advisor_provider"] == "deterministic"
     assert "AI Fellowship" in body["advisor_memo"]
-    assert "Retrieved evidence used" in body["advisor_memo"]
+    assert "Best angle" in body["advisor_memo"]
+    assert "Reviewer concerns" in body["advisor_memo"]
+    assert "Draft snippets" in body["advisor_memo"]
     assert "## Retrieved Context" in body["exported_notes"]
     assert "## Checklist" in body["exported_notes"]
     assert "## Advisor Memo" in body["exported_notes"]

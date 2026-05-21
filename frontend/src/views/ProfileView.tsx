@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useState } from "react";
 import type { ProfileDetailsPayload, ProfilePayload } from "../api";
-import type { CareerStage, OpportunityType } from "../types";
+import type { CareerStage, OpenAlexPreview, OpportunityType } from "../types";
 import { careerStages, opportunityTypes } from "../constants";
 import { ActionButton, Field, HelpTip, MultiValueField, SelectField, TextArea } from "../components/ui";
 
@@ -18,6 +18,7 @@ export function ProfileView({
   countryOptions,
   orcidForm,
   openAlexForm,
+  openAlexPreview,
   highlightFields,
   onProfileChange,
   onDetailsChange,
@@ -28,6 +29,7 @@ export function ProfileView({
   onOpenAlexChange,
   onImportOrcid,
   onImportOpenAlex,
+  onPreviewOpenAlex,
 }: {
   userEmail: string;
   userFullName: string;
@@ -40,6 +42,7 @@ export function ProfileView({
   countryOptions: string[];
   orcidForm: { orcid_id: string; email: string; career_stage: CareerStage; disciplines: string; preferred_countries: string };
   openAlexForm: { openalex_author_id: string; orcid_id: string; max_works: number };
+  openAlexPreview: OpenAlexPreview | null;
   highlightFields: string[];
   onProfileChange: (form: ProfilePayload) => void;
   onDetailsChange: (form: ProfileDetailsPayload) => void;
@@ -49,7 +52,8 @@ export function ProfileView({
   onOrcidChange: (form: { orcid_id: string; email: string; career_stage: CareerStage; disciplines: string; preferred_countries: string }) => void;
   onOpenAlexChange: (form: { openalex_author_id: string; orcid_id: string; max_works: number }) => void;
   onImportOrcid: (event: FormEvent) => void;
-  onImportOpenAlex: (event: FormEvent) => void;
+  onImportOpenAlex: () => void;
+  onPreviewOpenAlex: (event: FormEvent) => void;
 }) {
   const [section, setSection] = useState<ProfileSection>("basics");
   const accountName = userFullName || profileForm.full_name;
@@ -140,9 +144,7 @@ export function ProfileView({
             suggestions={countryOptions}
             onChange={(preferred_countries) => onProfileChange({ ...profileForm, preferred_countries })}
           />
-          <Field labelText="ORCID" value={profileForm.orcid_id ?? ""} onChange={(orcid_id) => onProfileChange({ ...profileForm, orcid_id })} />
           <Field labelText="Google Scholar URL" value={profileForm.google_scholar_url ?? ""} onChange={(google_scholar_url) => onProfileChange({ ...profileForm, google_scholar_url })} />
-          <Field labelText="LinkedIn URL" value={profileForm.linkedin_url ?? ""} onChange={(linkedin_url) => onProfileChange({ ...profileForm, linkedin_url })} />
           <ActionButton busy={loading} className="span-2">{activeProfileExists ? "Update profile" : "Create profile"}</ActionButton>
         </form>
       )}
@@ -153,6 +155,7 @@ export function ProfileView({
             <strong>Most important</strong>
             <span>Research summary, publications, and funding interests have the biggest effect on match explanations and advisor notes.</span>
           </div>
+          <AcademicEvidence detailsForm={detailsForm} />
           <TextArea labelText="Research summary" className={`span-2 ${fieldHighlight(highlights, "research_summary")}`} value={detailsForm.research_summary} onChange={(research_summary) => onDetailsChange({ ...detailsForm, research_summary })} />
           <MultiValueField className={fieldHighlight(highlights, "publications")} labelText="Publications" values={detailsForm.publications} placeholder="Paste a title or DOI, then Enter" help="Used by readiness scoring and the assistant to identify strengths and publication gaps." onChange={(publications) => onDetailsChange({ ...detailsForm, publications })} />
           <MultiValueField labelText="Degrees" values={detailsForm.degrees} placeholder="Example: PhD Computer Science" help="Used for eligibility checks when opportunities require a degree level." suggestions={["Bachelor", "Master", "PhD", "MD", "MBA"]} onChange={(degrees) => onDetailsChange({ ...detailsForm, degrees })} />
@@ -175,15 +178,47 @@ export function ProfileView({
         <ProfileImportsView
           orcidForm={orcidForm}
           openAlexForm={openAlexForm}
+          openAlexPreview={openAlexPreview}
           onOrcidChange={onOrcidChange}
           onOpenAlexChange={onOpenAlexChange}
           onImportOrcid={onImportOrcid}
           onImportOpenAlex={onImportOpenAlex}
+          onPreviewOpenAlex={onPreviewOpenAlex}
         />
       )}
 
       <datalist id="profile-country-options">{countryOptions.map((item) => <option value={item} key={item} />)}</datalist>
     </section>
+  );
+}
+
+function AcademicEvidence({ detailsForm }: { detailsForm: ProfileDetailsPayload }) {
+  const topPublications = detailsForm.publications.slice(0, 3);
+  const topInterests = detailsForm.funding_interests.slice(0, 6);
+  return (
+    <article className="academic-evidence span-2">
+      <div>
+        <span>Academic evidence</span>
+        <strong>{detailsForm.publications.length} publications</strong>
+      </div>
+      <p>
+        Imported publications and funding interests are used in match explanations, semantic profile embeddings, and advisor memos.
+      </p>
+      {topPublications.length > 0 && (
+        <ul>
+          {topPublications.map((publication) => (
+            <li key={publication}>{publication}</li>
+          ))}
+        </ul>
+      )}
+      {topInterests.length > 0 && (
+        <div className="chips">
+          {topInterests.map((interest) => (
+            <span key={interest}>{interest}</span>
+          ))}
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -194,17 +229,21 @@ function fieldHighlight(highlights: Set<string>, field: string): string {
 export function ProfileImportsView({
   orcidForm,
   openAlexForm,
+  openAlexPreview,
   onOrcidChange,
   onOpenAlexChange,
   onImportOrcid,
   onImportOpenAlex,
+  onPreviewOpenAlex,
 }: {
   orcidForm: { orcid_id: string; email: string; career_stage: CareerStage; disciplines: string; preferred_countries: string };
   openAlexForm: { openalex_author_id: string; orcid_id: string; max_works: number };
+  openAlexPreview: OpenAlexPreview | null;
   onOrcidChange: (form: { orcid_id: string; email: string; career_stage: CareerStage; disciplines: string; preferred_countries: string }) => void;
   onOpenAlexChange: (form: { openalex_author_id: string; orcid_id: string; max_works: number }) => void;
   onImportOrcid: (event: FormEvent) => void;
-  onImportOpenAlex: (event: FormEvent) => void;
+  onImportOpenAlex: () => void;
+  onPreviewOpenAlex: (event: FormEvent) => void;
 }) {
   return (
     <div>
@@ -222,19 +261,63 @@ export function ProfileImportsView({
         <Field labelText="Preferred countries" value={orcidForm.preferred_countries} onChange={(preferred_countries) => onOrcidChange({ ...orcidForm, preferred_countries })} />
         <button className="primary span-2">Import public profile</button>
       </form>
-      <form className="grid-form separated" onSubmit={onImportOpenAlex}>
+      <form className="grid-form separated" onSubmit={onPreviewOpenAlex}>
         <div className="span-2">
           <div className="title-with-help">
             <h2>OpenAlex Enrichment</h2>
             <HelpTip text="OpenAlex is an open scholarly graph. Enrichment adds public publication titles and concepts to improve profile completeness and recommendation explanations." />
           </div>
-          <p className="muted">Merge public concepts and publication titles into the active profile.</p>
+          <p className="muted">Preview public concepts and publication titles before merging them into the active profile.</p>
         </div>
         <Field labelText="OpenAlex author id" value={openAlexForm.openalex_author_id} onChange={(openalex_author_id) => onOpenAlexChange({ ...openAlexForm, openalex_author_id })} placeholder="A1234567890" />
         <Field labelText="ORCID override" value={openAlexForm.orcid_id} onChange={(orcid_id) => onOpenAlexChange({ ...openAlexForm, orcid_id })} />
         <Field labelText="Max works" type="number" value={String(openAlexForm.max_works)} onChange={(max_works) => onOpenAlexChange({ ...openAlexForm, max_works: Number(max_works) })} />
-        <button className="primary">Import OpenAlex</button>
+        <div className="actions">
+          <button className="primary">Preview OpenAlex</button>
+          <button className="secondary" type="button" disabled={!openAlexPreview} onClick={() => onImportOpenAlex()}>
+            Import preview
+          </button>
+        </div>
+        {openAlexPreview && <OpenAlexPreviewPanel preview={openAlexPreview} />}
       </form>
+    </div>
+  );
+}
+
+function OpenAlexPreviewPanel({ preview }: { preview: OpenAlexPreview }) {
+  return (
+    <article className="openalex-preview span-2">
+      <div className="section-title compact-title">
+        <div>
+          <p className="eyebrow">OpenAlex preview</p>
+          <h3>{preview.display_name || "Matched researcher"}</h3>
+          {preview.summary && <p>{preview.summary}</p>}
+        </div>
+        <strong>{preview.works_count} works</strong>
+      </div>
+      <div className="evidence-grid">
+        <EvidenceList title="New publications" values={preview.new_publications} empty="No new publications detected." />
+        <EvidenceList title="Suggested disciplines" values={preview.suggested_disciplines} empty="No discipline suggestions." />
+        <EvidenceList title="Suggested keywords" values={preview.suggested_keywords} empty="No keyword suggestions." />
+        <EvidenceList title="Funding interests" values={preview.suggested_funding_interests} empty="No funding interest suggestions." />
+      </div>
+    </article>
+  );
+}
+
+function EvidenceList({ title, values, empty }: { title: string; values: string[]; empty: string }) {
+  return (
+    <div>
+      <strong>{title}</strong>
+      {values.length ? (
+        <ul>
+          {values.slice(0, 6).map((value) => (
+            <li key={value}>{value}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted">{empty}</p>
+      )}
     </div>
   );
 }

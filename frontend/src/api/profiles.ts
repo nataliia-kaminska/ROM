@@ -1,4 +1,4 @@
-import type { CareerStage, Profile, ProfileDetails } from "../types";
+import type { CareerStage, OpenAlexPreview, Profile, ProfileDetails } from "../types";
 import type { ProfileDetailsPayload, ProfilePayload } from "./payloads";
 import { request } from "./client";
 
@@ -29,7 +29,16 @@ export const profilesApi = {
     token: string,
     body: { profile_id: number; openalex_author_id?: string | null; orcid_id?: string | null; max_works: number },
   ) =>
-    request<{ profile: Profile; details: ProfileDetails; preview: Record<string, unknown> }>("/integrations/openalex/import", {
+    request<{ profile: Profile; details: ProfileDetails; preview: OpenAlexPreview }>("/integrations/openalex/import", {
+      token,
+      method: "POST",
+      body,
+    }),
+  previewOpenAlex: (
+    token: string,
+    body: { profile_id: number; openalex_author_id?: string | null; orcid_id?: string | null; max_works: number },
+  ) =>
+    request<OpenAlexPreview>("/integrations/openalex/preview", {
       token,
       method: "POST",
       body,

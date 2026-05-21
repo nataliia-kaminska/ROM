@@ -244,6 +244,50 @@ Run the local scheduler:
 python -m app.workers.scheduler
 ```
 
+## Operations Checks
+
+Admin monitoring is available from the Admin Console and `/admin/dashboard`. The dashboard reports:
+
+- database connectivity;
+- Redis connectivity;
+- Elasticsearch cluster health when enabled;
+- worker queue depth and failed jobs;
+- configured email provider status.
+
+Run a lightweight performance evidence check for the thesis non-functional requirement:
+
+```powershell
+.\scripts\performance-check.ps1
+```
+
+For authenticated checks, pass a token and profile id through environment variables:
+
+```powershell
+$env:ROM_ACCESS_TOKEN = "<access-token>"
+$env:ROM_PROFILE_ID = "1"
+.\scripts\performance-check.ps1 -RunFrontendBuild
+```
+
+The script measures `/opportunities`, `/profiles/me`, `/recommendations/{profile_id}`, and optionally `npm run build`. API checks are expected to complete within 3000 ms during normal local operation.
+
+## Database Backup And Restore
+
+PostgreSQL backups can be created with:
+
+```powershell
+.\scripts\backup-postgres.ps1
+```
+
+The script uses local `pg_dump` when `DATABASE_URL` and PostgreSQL client tools are available. Otherwise, it falls back to the Docker Compose `postgres` service and writes a timestamped `.dump` file into `backups/`.
+
+Restore a backup with:
+
+```powershell
+.\scripts\restore-postgres.ps1 -BackupPath .\backups\research-matcher-YYYYMMDD-HHMMSS.dump
+```
+
+Restore uses `pg_restore --clean --if-exists`, so run it only against a database you intend to replace.
+
 ## First API Flow
 
 1. `POST /auth/register`

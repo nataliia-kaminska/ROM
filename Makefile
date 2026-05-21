@@ -25,7 +25,7 @@ venv:
 	@if not exist .venv py -3.11 -m venv .venv
 
 backend:
-	$(PYTHON) -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+	$(PYTHON) -m uvicorn app.main:app --reload --reload-dir app --reload-dir migrations --host 127.0.0.1 --port 8000
 
 frontend:
 	cd $(FRONTEND_DIR) && npm run dev

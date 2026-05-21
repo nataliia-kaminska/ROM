@@ -65,6 +65,43 @@ def test_openalex_import_enriches_profile_details(client, monkeypatch):
     assert "Genomics" in body["details"]["funding_interests"]
 
 
+def test_openalex_preview_shows_merge_plan_without_persisting(client, monkeypatch):
+    profile = client.post(
+        "/profiles",
+        json={
+            "full_name": "Preview User",
+            "career_stage": "phd",
+            "keywords": ["existing"],
+        },
+    ).json()
+
+    class FakeOpenAlexClient:
+        def read_author(self, author_id=None, orcid_id=None):
+            assert author_id == "https://openalex.org/A123"
+            return AUTHOR
+
+        def read_works(self, author_id: str, limit: int = 10):
+            assert author_id == "https://openalex.org/A123"
+            return WORKS
+
+    monkeypatch.setattr("app.api.openalex.OpenAlexClient", lambda: FakeOpenAlexClient())
+
+    response = client.post(
+        "/integrations/openalex/preview",
+        json={"profile_id": profile["id"], "openalex_author_id": "https://openalex.org/A123", "max_works": 5},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["display_name"] == "Ada Kovalenko"
+    assert body["works_count"] == 1
+    assert "Graph neural networks for genomics" in body["new_publications"]
+    assert "Bioinformatics" in body["suggested_disciplines"]
+
+    details = client.get(f"/profiles/{profile['id']}/details").json()
+    assert details["publications"] == []
+
+
 def test_profile_concept_normalizer_can_use_ai(monkeypatch):
     class FakeResponse:
         def raise_for_status(self):

@@ -1,4 +1,4 @@
-def test_bulk_import_creates_and_updates_opportunities(client):
+def test_bulk_import_creates_and_updates_opportunities(client, admin_headers):
     payload = {
         "source": "euraxess_curated",
         "dry_run": False,
@@ -23,7 +23,7 @@ def test_bulk_import_creates_and_updates_opportunities(client):
         ],
     }
 
-    response = client.post("/opportunities/bulk-import", json=payload)
+    response = client.post("/opportunities/bulk-import", headers=admin_headers, json=payload)
 
     assert response.status_code == 200
     body = response.json()
@@ -35,6 +35,7 @@ def test_bulk_import_creates_and_updates_opportunities(client):
 
     update_response = client.post(
         "/opportunities/bulk-import",
+        headers=admin_headers,
         json={
             "source": "euraxess_curated",
             "opportunities": [
@@ -62,9 +63,10 @@ def test_bulk_import_creates_and_updates_opportunities(client):
     assert len(batches_response.json()) == 2
 
 
-def test_bulk_import_dry_run_does_not_persist(client):
+def test_bulk_import_dry_run_does_not_persist(client, admin_headers):
     response = client.post(
         "/opportunities/bulk-import",
+        headers=admin_headers,
         json={
             "source": "fulbright_curated",
             "dry_run": True,
@@ -95,9 +97,10 @@ def test_bulk_import_dry_run_does_not_persist(client):
     assert batches_response.json()[0]["status"] == "dry_run"
 
 
-def test_bulk_import_updates_content_duplicate_with_cleaned_metadata(client):
+def test_bulk_import_updates_content_duplicate_with_cleaned_metadata(client, admin_headers):
     first = client.post(
         "/opportunities/bulk-import",
+        headers=admin_headers,
         json={
             "source": "daad",
             "opportunities": [
@@ -115,6 +118,7 @@ def test_bulk_import_updates_content_duplicate_with_cleaned_metadata(client):
     )
     second = client.post(
         "/opportunities/bulk-import",
+        headers=admin_headers,
         json={
             "source": "daad",
             "opportunities": [

@@ -39,11 +39,10 @@ export function useSession({ onLogout }: { onLogout?: () => void } = {}) {
         persistAccessToken(effectiveToken);
         [me, ownedProfiles] = await Promise.all([api.me(effectiveToken), api.profiles(effectiveToken)]);
       }
-      const availableProfiles = ownedProfiles.length > 0 ? ownedProfiles : [await createStarterProfile(effectiveToken, me)];
       setToken(effectiveToken);
       setUser(me);
-      setProfiles(availableProfiles);
-      const chosen = availableProfiles.find((profile) => profile.id === preferredProfileId) ?? availableProfiles[0] ?? null;
+      setProfiles(ownedProfiles);
+      const chosen = ownedProfiles.find((profile) => profile.id === preferredProfileId) ?? ownedProfiles[0] ?? null;
       setActiveProfileId(chosen?.id ?? null);
     } catch (sessionError) {
       setError((sessionError as Error).message);
@@ -51,21 +50,6 @@ export function useSession({ onLogout }: { onLogout?: () => void } = {}) {
     } finally {
       setLoading(false);
     }
-  }
-
-  async function createStarterProfile(nextToken: string, me: User) {
-    return api.createProfile(nextToken, {
-      full_name: me.full_name || me.email,
-      email: me.auth_provider === "orcid" ? null : me.email,
-      career_stage: "phd",
-      country: null,
-      disciplines: [],
-      keywords: [],
-      preferred_countries: [],
-      orcid_id: null,
-      google_scholar_url: null,
-      linkedin_url: null,
-    });
   }
 
   async function submitAuth(event: FormEvent) {

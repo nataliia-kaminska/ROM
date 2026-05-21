@@ -9,7 +9,10 @@ class ApplicationAssistantRequest(BaseModel):
 class ApplicationAssistantRead(BaseModel):
     opportunity_id: int
     profile_id: int
+    profile_name: str = ""
+    opportunity_title: str = ""
     retrieved_context: list[str] = Field(default_factory=list)
+    web_research: list[str] = Field(default_factory=list)
     application_checklist: list[str]
     motivation_letter_outline: list[str]
     research_fit_statement: str

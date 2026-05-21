@@ -9,8 +9,10 @@ from app.api.dependencies import get_current_user
 from app.core.rate_limit import rate_limit
 from app.core.security import create_access_token, hash_password, hash_token, verify_password
 from app.core.config import settings
-from app.db.models import User
+from app.db.models import ResearcherProfile, User
 from app.db.session import get_db
+from app.integrations.orcid.service import import_orcid_profile as import_orcid_profile_service
+from app.schemas.orcid import OrcidImportRequest
 from app.schemas.auth import AuthProviderConfigRead, TokenRead, UserLogin, UserRead, UserRegister, UserRegisterRead, UserVerifyEmail
 from app.services.email_verification import issue_email_verification, send_verification_email, verify_email_token
 from app.services.orcid_oauth import (
@@ -174,6 +176,7 @@ def complete_orcid_sign_in(
         db.refresh(user)
         logger.info("completed ORCID OAuth sign-in user_id=%s orcid_id=%s", user.id, orcid_id)
 
+    _ensure_orcid_profile(db, user, orcid_id)
     access_token = create_access_token(subject=str(user.id), extra_claims={"role": user.role.value})
     refresh_token = issue_refresh_token(user)
     db.commit()
@@ -198,6 +201,37 @@ def _unique_orcid_email(db: Session, orcid_id: str) -> str:
         if db.query(User).filter(User.email == candidate).first() is None:
             return candidate
         suffix += 1
+
+
+def _ensure_orcid_profile(db: Session, user: User, orcid_id: str) -> None:
+    existing = (
+        db.query(ResearcherProfile)
+        .filter((ResearcherProfile.user_id == user.id) | (ResearcherProfile.orcid_id == orcid_id))
+        .first()
+    )
+    if existing is not None:
+        if existing.user_id is None:
+            existing.user_id = user.id
+            db.commit()
+            logger.info("linked existing ORCID profile profile_id=%s user_id=%s", existing.id, user.id)
+        return
+
+    try:
+        result = import_orcid_profile_service(
+            db,
+            OrcidImportRequest(
+                orcid_id=orcid_id,
+                email=user.email,
+                career_stage="phd",
+                disciplines=[],
+                preferred_countries=[],
+            ),
+            user,
+        )
+        logger.info("created ORCID profile on first OAuth login profile_id=%s user_id=%s", result.profile.id, user.id)
+    except Exception:
+        db.rollback()
+        logger.exception("failed to auto-create ORCID profile on OAuth login user_id=%s orcid_id=%s", user.id, orcid_id)
 
 
 def _redirect_to_frontend_error(message: str) -> RedirectResponse:

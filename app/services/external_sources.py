@@ -5,12 +5,13 @@ from typing import Any
 from urllib.parse import urljoin, urlparse
 from xml.etree import ElementTree
 
-from app.db.models import OpportunityType
+from app.db.models import Opportunity, OpportunityType
 from app.services.external_fetch import ExternalSourceClient, validate_external_source_url
 from app.modules.opportunities.mappers import to_opportunity_preview
 from app.schemas.ingestion import ExternalSourceImportRequest, ExternalSourceImportResult
 from app.schemas.opportunities import OpportunityCreate
 from app.integrations.source_connectors import get_source_connector
+from app.services.embeddings import persist_opportunity_embedding_vector
 from app.services.ingestion_audit import ensure_source, finish_batch, start_batch
 from app.services.opportunity_import import import_opportunities
 from app.services.opportunity_search import index_opportunity_for_search
@@ -36,6 +37,10 @@ def import_external_source(payload: ExternalSourceImportRequest, db, client: Ext
     try:
         raw = source_client.fetch(str(payload.source_url))
         opportunities = normalize_external_source(raw, payload)
+        if payload.import_results:
+            opportunities = _select_new_external_payloads(db, opportunities, payload.source_name, payload.limit)
+        else:
+            opportunities = opportunities[: payload.limit]
         logger.info("external source normalized source=%s count=%s", payload.source_name, len(opportunities))
         processed, imported_count, updated_count, skipped_count = import_opportunities(
             db=db,
@@ -55,7 +60,9 @@ def import_external_source(payload: ExternalSourceImportRequest, db, client: Ext
         if payload.import_results:
             for opportunity in processed:
                 db.refresh(opportunity)
+                persist_opportunity_embedding_vector(db, opportunity)
                 index_opportunity_for_search(opportunity)
+            db.commit()
         db.refresh(batch)
         return ExternalSourceImportResult(
             source=payload.source_name,
@@ -79,7 +86,33 @@ def normalize_external_source(raw: str, payload: ExternalSourceImportRequest) ->
         items = _html_items(raw, str(payload.source_url))
     else:
         items = _rss_items(raw)
-    return [_payload_from_mapping(item, payload) for item in items if not _is_generic_provider_page(item, payload)][: payload.limit]
+    return [_payload_from_mapping(item, payload) for item in items if not _is_generic_provider_page(item, payload)]
+
+
+def _select_new_external_payloads(db, payloads: list[OpportunityCreate], source_name: str, limit: int) -> list[OpportunityCreate]:
+    existing_urls = {
+        row[0]
+        for row in db.query(Opportunity.url).filter(Opportunity.source == source_name).all()
+        if row[0]
+    }
+    seen_urls = set(existing_urls)
+    selected: list[OpportunityCreate] = []
+    for payload in payloads:
+        url = str(payload.url).rstrip("/")
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+        selected.append(payload)
+        if len(selected) >= limit:
+            break
+    logger.info(
+        "external source selected new payloads source=%s requested=%s selected=%s candidates=%s",
+        source_name,
+        limit,
+        len(selected),
+        len(payloads),
+    )
+    return selected
 
 
 def _is_generic_provider_page(item: dict[str, Any], payload: ExternalSourceImportRequest) -> bool:

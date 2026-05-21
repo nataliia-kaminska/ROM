@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 
 
-def _create_profile_and_opportunity(client):
+def _create_profile_and_opportunity(client, admin_headers):
     profile = client.post(
         "/profiles",
         json={
@@ -13,6 +13,7 @@ def _create_profile_and_opportunity(client):
     ).json()
     opportunity = client.post(
         "/opportunities",
+        headers=admin_headers,
         json={
             "title": "Quantum Research Grant",
             "opportunity_type": "grant",
@@ -26,8 +27,8 @@ def _create_profile_and_opportunity(client):
     return profile, opportunity
 
 
-def test_manual_reminder_can_be_created_listed_and_completed(client):
-    profile, opportunity = _create_profile_and_opportunity(client)
+def test_manual_reminder_can_be_created_listed_and_completed(client, admin_headers):
+    profile, opportunity = _create_profile_and_opportunity(client, admin_headers)
     remind_on = date.today()
 
     create_response = client.post(
@@ -59,8 +60,8 @@ def test_manual_reminder_can_be_created_listed_and_completed(client):
     assert active_response.json() == []
 
 
-def test_saving_opportunity_creates_deadline_reminder(client):
-    profile, opportunity = _create_profile_and_opportunity(client)
+def test_saving_opportunity_creates_deadline_reminder(client, admin_headers):
+    profile, opportunity = _create_profile_and_opportunity(client, admin_headers)
 
     status_response = client.put(
         f"/profiles/{profile['id']}/opportunities/{opportunity['id']}/status",
@@ -76,4 +77,3 @@ def test_saving_opportunity_creates_deadline_reminder(client):
     assert len(reminders) == 1
     assert reminders[0]["opportunity_id"] == opportunity["id"]
     assert reminders[0]["remind_on"] == str(date.today() + timedelta(days=14))
-

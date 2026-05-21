@@ -5,6 +5,7 @@ export type RequestOptions = {
   method?: string;
   body?: unknown;
   query?: Record<string, string | number | boolean | null | undefined>;
+  timeoutMs?: number;
 };
 
 function formatErrorPayload(payload: unknown, fallback: string): string {
@@ -37,15 +38,28 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     }
   });
 
-  const response = await fetch(url, {
-    method: options.method ?? "GET",
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
-    },
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-  });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), options.timeoutMs ?? 30000);
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: options.method ?? "GET",
+      credentials: "include",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+      },
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("Request timed out. Check that the backend is running and try again.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     let message = `Request failed with ${response.status}`;

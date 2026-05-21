@@ -1,10 +1,12 @@
-import type { Opportunity, OpportunityFilterOptions, OpportunityStatus, OpportunityType, Recommendation, StatusRecord } from "../types";
+import type { Opportunity, OpportunityFilterOptions, OpportunityStatus, OpportunityType, PaginatedResponse, Recommendation, StatusRecord } from "../types";
 import type { OpportunityPayload } from "./payloads";
 import { request } from "./client";
 
 export const opportunitiesApi = {
   opportunities: (query: Record<string, string | number | boolean | null | undefined>) =>
     request<Opportunity[]>("/opportunities", { query }),
+  opportunitiesPage: (query: Record<string, string | number | boolean | null | undefined>) =>
+    request<PaginatedResponse<Opportunity>>("/opportunities", { query: { ...query, include_total: true } }),
   opportunityOptions: () => request<OpportunityFilterOptions>("/opportunities/options"),
   opportunity: (id: number) => request<Opportunity>(`/opportunities/${id}`),
   recommendations: (token: string, profileId: number, query: {
@@ -16,10 +18,27 @@ export const opportunitiesApi = {
     career_stage?: string;
     source?: string;
     active_only?: boolean;
+    sort_by?: string;
+    sort_order?: string;
     limit: number;
     offset: number;
   }) =>
     request<Recommendation[]>(`/recommendations/${profileId}`, { token, query }),
+  recommendationsPage: (token: string, profileId: number, query: {
+    min_score: number;
+    include_ignored: boolean;
+    keyword?: string;
+    opportunity_type?: string;
+    country?: string;
+    career_stage?: string;
+    source?: string;
+    active_only?: boolean;
+    sort_by?: string;
+    sort_order?: string;
+    limit: number;
+    offset: number;
+  }) =>
+    request<PaginatedResponse<Recommendation>>(`/recommendations/${profileId}`, { token, query: { ...query, include_total: true } }),
   setStatus: (token: string, profileId: number, opportunityId: number, status: OpportunityStatus, notes = "") =>
     request<StatusRecord>(`/profiles/${profileId}/opportunities/${opportunityId}/status`, {
       token,

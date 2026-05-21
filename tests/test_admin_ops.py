@@ -35,6 +35,13 @@ def test_admin_dashboard_and_manual_opportunity_edit(client):
     dashboard = client.get("/admin/dashboard", headers=headers)
     assert dashboard.status_code == 200
     assert dashboard.json()["analytics"]["total_opportunities"] == 1
+    assert {item["name"] for item in dashboard.json()["health"]} >= {
+        "PostgreSQL / database",
+        "Redis",
+        "Elasticsearch",
+        "Worker queues",
+        "Email provider",
+    }
 
     edited = client.put(
         f"/admin/opportunities/{created['id']}",
@@ -166,3 +173,37 @@ def test_admin_duplicate_merge_handles_status_and_reminder_conflicts(client):
     assert custom_reminders[0]["opportunity_id"] == target["id"]
     assert "target reminder" in custom_reminders[0]["message"]
     assert "duplicate reminder" in custom_reminders[0]["message"]
+
+
+def test_admin_analytics_builds_match_score_distribution(client, admin_headers):
+    profile = client.post(
+        "/profiles",
+        json={
+            "full_name": "Score Distribution User",
+            "career_stage": "phd",
+            "disciplines": ["Computer Science"],
+            "keywords": ["machine learning"],
+        },
+    ).json()
+    client.post(
+        "/opportunities",
+        headers=admin_headers,
+        json={
+            "title": "Machine Learning Fellowship",
+            "opportunity_type": "fellowship",
+            "source": "manual_seed",
+            "url": "https://example.org/ml-score-distribution",
+            "summary": "Fellowship for machine learning research.",
+            "disciplines": ["Computer Science"],
+            "keywords": ["machine learning"],
+            "career_stages": ["phd"],
+        },
+    )
+
+    response = client.get("/admin/analytics", headers=admin_headers)
+
+    assert response.status_code == 200
+    distribution = response.json()["match_score_distribution"]
+    assert set(distribution) == {"0-25", "26-50", "51-75", "76-100"}
+    assert sum(distribution.values()) >= 1
+    assert profile["id"]

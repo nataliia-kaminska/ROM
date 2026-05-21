@@ -1,9 +1,6 @@
-import type { DetailTab, View } from "../../constants";
-import { detailTabLabels, trackedStatuses } from "../../constants";
+import type { View } from "../../constants";
 import type { ApplicationAssistantResult, Opportunity, OpportunityStatus, Recommendation, Reminder, StatusRecord } from "../../types";
-import { label, statusHelp } from "../../utils/format";
-import { EmptyState } from "../ui";
-import { RequirementSummary } from "./RequirementSummary";
+import { label, opportunitySummary } from "../../utils/format";
 import { ScoreBreakdown } from "./ScoreBreakdown";
 
 export function OpportunityDrawer({
@@ -13,12 +10,12 @@ export function OpportunityDrawer({
   assistantResult,
   selectedStatusIds,
   statusByOpportunity,
-  detailTab,
-  setDetailTab,
+  canTrack,
   onClose,
   onStatus,
   setAssistantForm,
   setView,
+  onOpenFullDetails,
 }: {
   selectedOpportunity: Opportunity;
   selectedRecommendation: Recommendation | null;
@@ -26,16 +23,20 @@ export function OpportunityDrawer({
   assistantResult: ApplicationAssistantResult | null;
   selectedStatusIds: ReadonlySet<number>;
   statusByOpportunity: ReadonlyMap<number, StatusRecord>;
-  detailTab: DetailTab;
-  setDetailTab: (tab: DetailTab) => void;
+  canTrack: boolean;
   onClose: () => void;
   onStatus: (opportunityId: number, status: OpportunityStatus) => void;
   setAssistantForm: (form: { opportunity_id: string }) => void;
   setView: (view: View) => void;
+  onOpenFullDetails: (opportunityId: number) => void;
 }) {
+  const topReasons = selectedRecommendation?.reasons.slice(0, 3) ?? [];
+  const currentStatus = statusByOpportunity.get(selectedOpportunity.id);
+  const currentAssistant = assistantResult?.opportunity_id === selectedOpportunity.id ? assistantResult : null;
+
   return (
-    <div className="drawer" role="dialog" aria-modal="true">
-      <article>
+    <div className="drawer" role="dialog" aria-modal="true" onClick={onClose}>
+      <article className="quick-drawer" onClick={(event) => event.stopPropagation()}>
         <button className="close" onClick={onClose}>
           x
         </button>
@@ -44,109 +45,59 @@ export function OpportunityDrawer({
         <div className="meta">
           <span>{label(selectedOpportunity.opportunity_type)}</span>
           <span>{selectedOpportunity.deadline ?? "No deadline"}</span>
+          {currentStatus && <span>{label(currentStatus.status)}</span>}
         </div>
+        <p>{opportunitySummary(selectedOpportunity)}</p>
         {selectedRecommendation && (
           <div className="intelligence-panel">
             <strong>{selectedRecommendation.match_score}% match</strong>
             <ScoreBreakdown item={selectedRecommendation} />
           </div>
         )}
-        <div className="tabs">
-          {(["overview", "reasons", "eligibility", "assistant", "reminders"] as const).map((tab) => (
-            <button className={detailTab === tab ? "active" : ""} key={tab} onClick={() => setDetailTab(tab)}>
-              {detailTabLabels[tab]}
-            </button>
-          ))}
-        </div>
-        {detailTab === "overview" && (
-          <>
-            <p>{selectedOpportunity.summary || "No summary provided."}</p>
-            <div className="chips">
-              {[...selectedOpportunity.disciplines, ...selectedOpportunity.keywords, ...selectedOpportunity.countries].map((chip) => (
-                <span key={chip}>{chip}</span>
-              ))}
-            </div>
-          </>
-        )}
-        {detailTab === "reasons" && (
-          selectedRecommendation ? (
-            <div className="explanation-grid">
-              {selectedRecommendation.reasons.map((reason) => (
-                <article key={reason}>
-                  <strong>{reason.includes("lower") ? "Risk" : "Signal"}</strong>
-                  <p>{reason}</p>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <EmptyState title="No match reasons" detail="Recommendations explain semantic, eligibility, deadline, and history signals once a profile is selected." />
-          )
-        )}
-        {detailTab === "eligibility" && (
-          <>
-            <h3>Eligibility</h3>
-            <p>{selectedOpportunity.eligibility || "No eligibility text provided."}</p>
-            <RequirementSummary opportunity={selectedOpportunity} />
-            <div className="score-grid">
-              <span>Career stages {selectedOpportunity.career_stages.join(", ") || "Not specified"}</span>
-              <span>Countries {selectedOpportunity.countries.join(", ") || "Not specified"}</span>
-            </div>
-          </>
-        )}
-        {detailTab === "assistant" && (
-          <div>
-            {assistantResult?.opportunity_id === selectedOpportunity.id ? (
-              <>
-                <h3>Research Fit</h3>
-                <p>{assistantResult.research_fit_statement}</p>
-                <h3>Readiness</h3>
-                <p>{assistantResult.readiness_score}% application readiness</p>
-                <h3>Advisor Memo</h3>
-                <p>{assistantResult.advisor_memo}</p>
-                <h3>Warnings</h3>
-                <ul className="reasons">{(assistantResult.eligibility_warnings.length ? assistantResult.eligibility_warnings : ["None flagged"]).map((item) => <li key={item}>{item}</li>)}</ul>
-                <h3>Gaps</h3>
-                <ul className="reasons">{(assistantResult.gap_analysis.length ? assistantResult.gap_analysis : ["None flagged"]).map((item) => <li key={item}>{item}</li>)}</ul>
-              </>
-            ) : (
-              <button
-                className="primary"
-                disabled={!selectedStatusIds.has(selectedOpportunity.id)}
-                onClick={() => {
-                  setAssistantForm({ opportunity_id: String(selectedOpportunity.id) });
-                  setView("assistant");
-                  onClose();
-                }}
-              >
-                {selectedStatusIds.has(selectedOpportunity.id) ? "Open assistant for this opportunity" : "Save or plan to use assistant"}
-              </button>
-            )}
-          </div>
-        )}
-        {detailTab === "reminders" && (
-          <div className="table">
-            {selectedOpportunityReminders.map((reminder) => (
-              <div className="table-row compact-row" key={reminder.id}>
-                <span>{reminder.message || "Deadline reminder"}</span>
-                <span>{reminder.remind_on}</span>
-                <span>{label(reminder.status)}</span>
-              </div>
+        {topReasons.length > 0 && (
+          <ul className="reasons">
+            {topReasons.map((reason) => (
+              <li key={reason}>{reason}</li>
             ))}
-            {selectedOpportunityReminders.length === 0 && <EmptyState title="No reminders for this opportunity" detail="Saving or planning opportunities can create deadline reminders automatically." />}
-          </div>
+          </ul>
         )}
-        <a className="primary link-button" href={selectedOpportunity.url} target="_blank" rel="noreferrer">
+        <div className="actions">
+          {canTrack ? (
+            <>
+              <button className="secondary" type="button" onClick={() => onStatus(selectedOpportunity.id, "saved")}>
+                Save
+              </button>
+              <button className="tertiary" type="button" onClick={() => onStatus(selectedOpportunity.id, "ignored")}>
+                Ignore
+              </button>
+            </>
+          ) : (
+            <span className="card-action-note">Sign in to save or plan</span>
+          )}
+          <button className="primary" type="button" onClick={() => onOpenFullDetails(selectedOpportunity.id)}>
+            View full details
+          </button>
+        </div>
+        <div className="quick-drawer-foot">
+          {currentAssistant ? <span>{currentAssistant.readiness_score}% advisor readiness</span> : <span>{canTrack ? selectedStatusIds.has(selectedOpportunity.id) ? "Assistant ready from Apply Assistant" : "Save to unlock advisor planning" : "Create an account for personalized planning"}</span>}
+          {selectedOpportunityReminders.length > 0 && <span>{selectedOpportunityReminders.length} reminder{selectedOpportunityReminders.length === 1 ? "" : "s"}</span>}
+          <button
+            className="tertiary"
+            disabled={!selectedStatusIds.has(selectedOpportunity.id)}
+            onClick={() => {
+              setAssistantForm({ opportunity_id: String(selectedOpportunity.id) });
+              setView("assistant");
+              onClose();
+            }}
+          >
+            Open assistant
+          </button>
+        </div>
+        <a className="secondary link-button" href={selectedOpportunity.url} target="_blank" rel="noreferrer">
           Open source
         </a>
-        <div className="actions">
-          {trackedStatuses.map((status) => (
-            <button key={status} className="secondary" title={statusHelp(status)} onClick={() => onStatus(selectedOpportunity.id, status)}>
-              {label(status)}
-            </button>
-          ))}
-        </div>
-        {statusByOpportunity.get(selectedOpportunity.id) && (
-          <p className="muted">Current status: {label(statusByOpportunity.get(selectedOpportunity.id)!.status)}</p>
+        {!currentStatus && (
+          <p className="muted">Click the card title area for a quick check, then open full details when it looks worth deeper review.</p>
         )}
       </article>
     </div>

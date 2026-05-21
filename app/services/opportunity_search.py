@@ -19,11 +19,13 @@ def list_opportunities_with_search(
     career_stage: str | None = None,
     keyword: str | None = None,
     active_only: bool = False,
+    sort_by: str = "deadline",
+    sort_order: str = "asc",
     limit: int = 50,
     offset: int = 0,
 ) -> list[Opportunity]:
     has_multi_value_filters = any(_has_multiple_values(value) for value in [keyword, source, opportunity_type, country, career_stage])
-    if keyword and settings.elasticsearch_enabled and not has_multi_value_filters:
+    if keyword and settings.elasticsearch_enabled and not has_multi_value_filters and sort_by == "relevance":
         try:
             logger.info(
                 "search opportunities using elasticsearch keyword=%s source=%s type=%s limit=%s offset=%s",
@@ -68,8 +70,30 @@ def list_opportunities_with_search(
         career_stage=career_stage,
         keyword=keyword,
         active_only=active_only,
+        sort_by=sort_by,
+        sort_order=sort_order,
         limit=limit,
         offset=offset,
+    )
+
+
+def count_opportunities_with_search(
+    db: Session,
+    source: str | None = None,
+    opportunity_type: str | None = None,
+    country: str | None = None,
+    career_stage: str | None = None,
+    keyword: str | None = None,
+    active_only: bool = False,
+) -> int:
+    return opportunity_repository.count_opportunities(
+        db,
+        source=source,
+        opportunity_type=opportunity_type,
+        country=country,
+        career_stage=career_stage,
+        keyword=keyword,
+        active_only=active_only,
     )
 
 

@@ -10,8 +10,8 @@ class GrantsGovClient:
     def __init__(self, http_client: httpx.Client | None = None) -> None:
         self.http_client = http_client or httpx.Client(timeout=20)
 
-    def search(self, keyword: str, limit: int = 10) -> list[dict[str, Any]]:
-        payload = {"keyword": keyword, "rows": limit}
+    def search(self, keyword: str, limit: int = 10, offset: int = 0) -> list[dict[str, Any]]:
+        payload = {"keyword": keyword, "rows": limit, "startRecordNum": offset}
         response = self.http_client.post(GRANTS_GOV_SEARCH_URL, json=payload)
         response.raise_for_status()
         body = response.json()

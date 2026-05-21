@@ -6,6 +6,7 @@ import type {
   CareerStage,
   NotificationItem,
   NotificationPreference,
+  OpenAlexPreview,
   Opportunity,
   OpportunityStatus,
   OpportunityType,
@@ -25,6 +26,9 @@ type Filters = {
   active_only: boolean;
   min_score: number;
   include_ignored: boolean;
+  status_filter: string;
+  sort_by: string;
+  sort_order: string;
 };
 
 type GrantsForm = { keyword: string; limit: number; import_results: boolean };
@@ -54,6 +58,7 @@ type ExternalForm = {
 
 export type RouteController = {
   view: View;
+  opportunityId: number | null;
   onViewChange: (view: View) => void;
 };
 
@@ -66,6 +71,8 @@ export type WorkspaceController = {
   opportunities: Opportunity[];
   matchesPage: number;
   matchesHasNextPage: boolean;
+  matchesTotalPages: number;
+  matchesTotalIsEstimate: boolean;
   statuses: StatusRecord[];
   reminders: Reminder[];
   reminderForm: { opportunity_id: string; remind_on: string; message: string };
@@ -98,6 +105,7 @@ export type ProfileController = {
   detailsForm: ProfileDetailsPayload;
   orcidForm: OrcidForm;
   openAlexForm: OpenAlexForm;
+  openAlexPreview: OpenAlexPreview | null;
   onProfileChange: (profile: ProfilePayload) => void;
   onDetailsChange: (details: ProfileDetailsPayload) => void;
   onLoadDetails: () => void;
@@ -107,7 +115,8 @@ export type ProfileController = {
   onOrcidChange: (form: OrcidForm) => void;
   onOpenAlexChange: (form: OpenAlexForm) => void;
   onImportOrcid: (event: FormEvent) => void;
-  onImportOpenAlex: (event: FormEvent) => void;
+  onImportOpenAlex: () => void;
+  onPreviewOpenAlex: (event: FormEvent) => void;
 };
 
 export type NotificationsController = {
@@ -122,6 +131,7 @@ export type NotificationsController = {
 export type AssistantController = {
   assistantForm: { opportunity_id: string };
   assistantResult: ApplicationAssistantResult | null;
+  assistantLoading: boolean;
   onAssistantFormChange: (form: { opportunity_id: string }) => void;
   onGenerateAssistant: (event: FormEvent) => void;
 };

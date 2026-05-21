@@ -1,4 +1,4 @@
-def test_create_opportunity_rejects_duplicate_url(client):
+def test_create_opportunity_rejects_duplicate_url(client, admin_headers):
     payload = {
         "title": "Duplicate Guard Grant",
         "opportunity_type": "grant",
@@ -6,14 +6,14 @@ def test_create_opportunity_rejects_duplicate_url(client):
         "url": "https://example.org/duplicate-guard",
     }
 
-    first_response = client.post("/opportunities", json=payload)
-    second_response = client.post("/opportunities", json=payload)
+    first_response = client.post("/opportunities", headers=admin_headers, json=payload)
+    second_response = client.post("/opportunities", headers=admin_headers, json=payload)
 
     assert first_response.status_code == 201
     assert second_response.status_code == 409
 
 
-def test_list_opportunities_supports_filters_and_pagination(client):
+def test_list_opportunities_supports_filters_and_pagination(client, admin_headers):
     opportunities = [
         {
             "title": "German AI Fellowship",
@@ -41,7 +41,7 @@ def test_list_opportunities_supports_filters_and_pagination(client):
         },
     ]
     for opportunity in opportunities:
-        assert client.post("/opportunities", json=opportunity).status_code == 201
+        assert client.post("/opportunities", headers=admin_headers, json=opportunity).status_code == 201
 
     filtered = client.get(
         "/opportunities",
@@ -60,4 +60,3 @@ def test_list_opportunities_supports_filters_and_pagination(client):
     body = filtered.json()
     assert len(body) == 1
     assert body[0]["title"] == "German AI Fellowship"
-

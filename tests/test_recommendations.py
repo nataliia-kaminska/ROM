@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 
 
-def test_profile_opportunity_recommendation_flow(client):
+def test_profile_opportunity_recommendation_flow(client, admin_headers):
     profile_response = client.post(
         "/profiles",
         json={
@@ -21,6 +21,7 @@ def test_profile_opportunity_recommendation_flow(client):
 
     opportunity_response = client.post(
         "/opportunities",
+        headers=admin_headers,
         json={
             "title": "AI for Genomics Exchange Fellowship",
             "opportunity_type": "fellowship",
@@ -53,7 +54,7 @@ def test_profile_opportunity_recommendation_flow(client):
     assert len(paged_response.json()) == 1
 
 
-def test_recommendations_use_profile_details_and_hide_ignored_status(client):
+def test_recommendations_use_profile_details_and_hide_ignored_status(client, admin_headers):
     profile_response = client.post(
         "/profiles",
         json={
@@ -78,6 +79,7 @@ def test_recommendations_use_profile_details_and_hide_ignored_status(client):
 
     good_opportunity = client.post(
         "/opportunities",
+        headers=admin_headers,
         json={
             "title": "Urban Resilience Climate Grant",
             "opportunity_type": "grant",
@@ -92,6 +94,7 @@ def test_recommendations_use_profile_details_and_hide_ignored_status(client):
     ).json()
     ignored_opportunity = client.post(
         "/opportunities",
+        headers=admin_headers,
         json={
             "title": "Unwanted US Climate Grant",
             "opportunity_type": "grant",
@@ -123,7 +126,7 @@ def test_recommendations_use_profile_details_and_hide_ignored_status(client):
     }
 
 
-def test_recommendations_include_semantic_similarity_signal(client):
+def test_recommendations_include_semantic_similarity_signal(client, admin_headers):
     profile = client.post(
         "/profiles",
         json={
@@ -142,6 +145,7 @@ def test_recommendations_include_semantic_similarity_signal(client):
     )
     related = client.post(
         "/opportunities",
+        headers=admin_headers,
         json={
             "title": "Emergency Triage AI Fellowship",
             "opportunity_type": "fellowship",
@@ -155,6 +159,7 @@ def test_recommendations_include_semantic_similarity_signal(client):
     ).json()
     unrelated = client.post(
         "/opportunities",
+        headers=admin_headers,
         json={
             "title": "Marine Robotics Training",
             "opportunity_type": "training",
@@ -173,7 +178,7 @@ def test_recommendations_include_semantic_similarity_signal(client):
     assert any("Semantic similarity" in reason for reason in recommendations[0]["reasons"])
 
 
-def test_recommendations_adapt_to_user_feedback_history(client):
+def test_recommendations_adapt_to_user_feedback_history(client, admin_headers):
     profile = client.post(
         "/profiles",
         json={
@@ -185,6 +190,7 @@ def test_recommendations_adapt_to_user_feedback_history(client):
     ).json()
     saved_seed = client.post(
         "/opportunities",
+        headers=admin_headers,
         json={
             "title": "Saved AI Seed",
             "opportunity_type": "grant",
@@ -196,6 +202,7 @@ def test_recommendations_adapt_to_user_feedback_history(client):
     ).json()
     ignored_seed = client.post(
         "/opportunities",
+        headers=admin_headers,
         json={
             "title": "Ignored Marine Seed",
             "opportunity_type": "training",
@@ -207,6 +214,7 @@ def test_recommendations_adapt_to_user_feedback_history(client):
     ).json()
     positive_candidate = client.post(
         "/opportunities",
+        headers=admin_headers,
         json={
             "title": "Robotics AI Grant",
             "opportunity_type": "grant",
@@ -218,6 +226,7 @@ def test_recommendations_adapt_to_user_feedback_history(client):
     ).json()
     ignored_candidate = client.post(
         "/opportunities",
+        headers=admin_headers,
         json={
             "title": "Marine Robotics Training",
             "opportunity_type": "training",

@@ -1,10 +1,10 @@
 import type { Opportunity } from "../../types";
-import { EmptyState } from "../ui";
+import { HelpTip } from "../ui";
 
 export function RequirementSummary({ opportunity }: { opportunity: Opportunity }) {
   const requirements = opportunity.extracted_requirements;
   if (!requirements || (requirements.confidence ?? 0) === 0) {
-    return <EmptyState title="No parsed requirements yet" detail="Add richer eligibility text to extract career stage, country, degree, language, and publication requirements." />;
+    return null;
   }
   const rows = [
     ["Career stages", requirements.career_stages.join(", ")],
@@ -15,7 +15,10 @@ export function RequirementSummary({ opportunity }: { opportunity: Opportunity }
   ].filter(([, value]) => value);
   return (
     <div className="requirement-summary">
-      <strong>Parsed requirements ({requirements.confidence}% confidence)</strong>
+      <strong>
+        Eligibility signals
+        <HelpTip text={`Automatically extracted from the opportunity text. Extraction confidence: ${requirements.confidence}%.`} />
+      </strong>
       <div className="score-grid">
         {rows.map(([name, value]) => (
           <span key={name}>{name}: {value}</span>

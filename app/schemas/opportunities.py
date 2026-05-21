@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field, HttpUrl
 
@@ -14,6 +14,8 @@ class ExtractedRequirementRead(BaseModel):
     mobility: str = ""
     citizenship: str = ""
     years_since_phd: int | None = None
+    key_details: list[str] = Field(default_factory=list)
+    why_it_matters: list[str] = Field(default_factory=list)
     snippets: list[str] = Field(default_factory=list)
     confidence: int = 0
 
@@ -38,10 +40,18 @@ class OpportunityCreate(OpportunityBase):
 
 class OpportunityRead(OpportunityBase):
     id: int
+    created_at: datetime | None = None
     extracted_requirements: ExtractedRequirementRead | None = None
     requirements_confidence: int = 0
 
     model_config = {"from_attributes": True}
+
+
+class OpportunityListResponse(BaseModel):
+    items: list[OpportunityRead] = Field(default_factory=list)
+    total: int = 0
+    limit: int = 50
+    offset: int = 0
 
 
 class OpportunityPreview(OpportunityBase):

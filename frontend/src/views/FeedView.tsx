@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Opportunity, OpportunityStatus, Recommendation } from "../types";
 import { careerStages, opportunityTypes, type View } from "../constants";
 import { OpportunityCard } from "../components/opportunities";
@@ -13,6 +14,9 @@ type FeedFilters = {
   active_only: boolean;
   min_score: number;
   include_ignored: boolean;
+  status_filter: string;
+  sort_by: string;
+  sort_order: string;
 };
 
 export function FeedView({
@@ -27,6 +31,8 @@ export function FeedView({
   opportunities,
   page,
   hasNextPage,
+  totalPages,
+  totalIsEstimate,
   onFiltersChange,
   onResetFilters,
   onPageChange,
@@ -45,6 +51,8 @@ export function FeedView({
   opportunities: Opportunity[];
   page: number;
   hasNextPage: boolean;
+  totalPages: number;
+  totalIsEstimate: boolean;
   onFiltersChange: (filters: FeedFilters) => void;
   onResetFilters: () => void;
   onPageChange: (page: number) => void;
@@ -52,6 +60,7 @@ export function FeedView({
   onSelectOpportunity: (opportunity: Opportunity) => void;
   onStatus: (opportunityId: number, status: OpportunityStatus) => void;
 }) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const catalogRecommendations = opportunities.map((opportunity) => ({
     opportunity,
     match_score: 0,
@@ -64,6 +73,8 @@ export function FeedView({
     user_status: null,
   }));
   const showingPersonalized = activeProfile && recommendations.length > 0;
+  const selectedSortBy = activeProfile ? filters.sort_by : catalogSortBy(filters.sort_by);
+  const activeFilterCount = countActiveFilters(filters);
   const items = (showingPersonalized ? recommendations : catalogRecommendations).filter((item) =>
     recommendationMatchesFilters(item, filters),
   );
@@ -76,84 +87,126 @@ export function FeedView({
             <h2>Matches</h2>
             <HelpTip text="Keyword search uses Elasticsearch when it is enabled. Elasticsearch ranks full-text matches across title, summary, eligibility, keywords, and disciplines; profile recommendations still use embedding similarity plus eligibility, deadline, and history scoring." />
           </div>
-          {showingPersonalized ? (
-            <p>Recommended opportunities appear first. Save, Plan, or Ignore to make future results smarter.</p>
-          ) : activeProfile ? (
-            <p className="muted">Showing the opportunity catalog while personalized matching warms up. Save or plan useful items to teach the system.</p>
-          ) : (
-            <p className="muted">You are viewing the public catalog. Create an account and profile to unlock personalized match scores and planning tools.</p>
-          )}
+          <p className="muted">Browse research opportunities, compare fit, and move promising items into your application workflow.</p>
         </div>
         <button className="secondary" type="button" onClick={() => onViewChange("about")}>
           How it works
         </button>
       </div>
-      <div className="filters">
+      <div className="match-toolbar-row">
         <MultiValueField
-          className="filter-field filter-field-wide"
+          className="filter-field match-keywords"
           labelText="Keywords"
           values={splitList(filters.keyword)}
           suggestions={keywordOptions}
+          suggestionsOnFocusOnly
           placeholder="AI, biology, mobility..."
           onChange={(keyword) => onFiltersChange({ ...filters, keyword: keyword.join(", ") })}
         />
-        <MultiValueField
-          className="filter-field"
-          labelText="Type"
-          values={splitList(filters.opportunity_type)}
-          suggestions={opportunityTypes.map(label)}
-          placeholder="Grant, fellowship..."
-          onChange={(types) => onFiltersChange({ ...filters, opportunity_type: types.join(", ") })}
-        />
-        <MultiValueField
-          className="filter-field"
-          labelText="Countries"
-          values={splitList(filters.country)}
-          suggestions={countryOptions}
-          placeholder="Germany, EU, USA..."
-          onChange={(country) => onFiltersChange({ ...filters, country: country.join(", ") })}
-        />
-        <MultiValueField
-          className="filter-field"
-          labelText="Career stages"
-          values={splitList(filters.career_stage)}
-          suggestions={careerStages.map(label)}
-          placeholder="PhD, postdoc..."
-          onChange={(career_stage) => onFiltersChange({ ...filters, career_stage: career_stage.join(", ") })}
-        />
-        <MultiValueField
-          className="filter-field"
-          labelText="Sources"
-          values={splitList(filters.source)}
-          suggestions={sourceOptions}
-          placeholder="euraxess, daad..."
-          onChange={(source) => onFiltersChange({ ...filters, source: source.join(", ") })}
-        />
-        <div className="filter-actions">
-          <label className="toggle filter-toggle">
-            <input
-              type="checkbox"
-              checked={filters.active_only}
-              onChange={(event) => onFiltersChange({ ...filters, active_only: event.target.checked })}
-            />
-            <span>Active only</span>
+        <div className="match-secondary-controls">
+          <label className="field sort-combo">
+            <span>Sort</span>
+            <div>
+              <select value={selectedSortBy} onChange={(event) => onFiltersChange({ ...filters, sort_by: event.target.value })}>
+                {activeProfile && <option value="match_score">Match score</option>}
+                {activeProfile && <option value="semantic_score">Semantic fit</option>}
+                {activeProfile && <option value="readiness_score">Readiness</option>}
+                <option value="deadline">Deadline</option>
+                <option value="created_at">Newest added</option>
+                <option value="source">Source</option>
+                <option value="title">Title</option>
+              </select>
+              <button
+                className="secondary sort-direction"
+                type="button"
+                title={sortOrderLabel(selectedSortBy, filters.sort_order === "desc" ? "asc" : "desc")}
+                aria-label={`Sort ${filters.sort_order === "desc" ? "descending" : "ascending"}`}
+                onClick={() => onFiltersChange({ ...filters, sort_order: filters.sort_order === "desc" ? "asc" : "desc" })}
+              >
+                {filters.sort_order === "desc" ? "↓" : "↑"}
+              </button>
+            </div>
           </label>
-          <button className="tertiary" type="button" onClick={onResetFilters}>
-            Clear filters
+          <button className="secondary filters-toggle" type="button" onClick={() => setFiltersOpen((current) => !current)}>
+            Filters active: {activeFilterCount}
           </button>
         </div>
       </div>
-      <div className="pagination-bar">
-        <span>Page {page}</span>
-        <div className="actions">
-          <button className="secondary" type="button" disabled={workspaceLoading || page === 1} onClick={() => onPageChange(page - 1)}>
-            Previous
-          </button>
-          <button className="secondary" type="button" disabled={workspaceLoading || !hasNextPage} onClick={() => onPageChange(page + 1)}>
-            Next
-          </button>
+      {filtersOpen && (
+        <div className="filters collapsible-filters">
+          <MultiValueField
+            className="filter-field"
+            labelText="Type"
+            values={splitList(filters.opportunity_type)}
+            suggestions={opportunityTypes.map(label)}
+            placeholder="Grant, fellowship..."
+            onChange={(types) => onFiltersChange({ ...filters, opportunity_type: types.join(", ") })}
+          />
+          <MultiValueField
+            className="filter-field"
+            labelText="Countries"
+            values={splitList(filters.country)}
+            suggestions={countryOptions}
+            placeholder="Germany, EU, USA..."
+            onChange={(country) => onFiltersChange({ ...filters, country: country.join(", ") })}
+          />
+          <MultiValueField
+            className="filter-field"
+            labelText="Career stages"
+            values={splitList(filters.career_stage)}
+            suggestions={careerStages.map(label)}
+            placeholder="PhD, postdoc..."
+            onChange={(career_stage) => onFiltersChange({ ...filters, career_stage: career_stage.join(", ") })}
+          />
+          <MultiValueField
+            className="filter-field"
+            labelText="Sources"
+            values={splitList(filters.source)}
+            suggestions={sourceOptions}
+            placeholder="euraxess, daad..."
+            onChange={(source) => onFiltersChange({ ...filters, source: source.join(", ") })}
+          />
+          {activeProfile && (
+            <label className="field filter-field">
+              <span>Status</span>
+              <select value={filters.status_filter} onChange={(event) => onFiltersChange(statusFilterChange(filters, event.target.value))}>
+                <option value="visible">Active workflow</option>
+                <option value="all">All, including ignored</option>
+                <option value="saved">Saved</option>
+                <option value="planned">Planned</option>
+                <option value="applied">Applied</option>
+                <option value="accepted">Accepted</option>
+                <option value="rejected">Rejected</option>
+                <option value="ignored">Ignored</option>
+              </select>
+            </label>
+          )}
+          <div className="filter-actions">
+            <label className="toggle filter-toggle">
+              <input
+                type="checkbox"
+                checked={filters.active_only}
+                onChange={(event) => onFiltersChange({ ...filters, active_only: event.target.checked })}
+              />
+              <span>Active only</span>
+            </label>
+            <button className="primary" type="button" onClick={() => setFiltersOpen(false)}>
+              Apply
+            </button>
+            <button
+              className="tertiary"
+              type="button"
+              onClick={() => {
+                onResetFilters();
+                setFiltersOpen(false);
+              }}
+            >
+              Clear filters
+            </button>
+          </div>
         </div>
-      </div>
+      )}
+      <PaginationBar page={page} totalPages={totalPages} totalIsEstimate={totalIsEstimate} hasNextPage={hasNextPage} loading={workspaceLoading} onPageChange={onPageChange} />
       <div className="cards">
         {workspaceLoading ? <SkeletonCards /> : items.map(
           (item) => (
@@ -171,8 +224,63 @@ export function FeedView({
           <EmptyState title="No opportunities found" detail="Try clearing filters or searching broader terms like fellowship, mobility, AI, health, or Europe." />
         )}
       </div>
+      <PaginationBar page={page} totalPages={totalPages} totalIsEstimate={totalIsEstimate} hasNextPage={hasNextPage} loading={workspaceLoading} onPageChange={onPageChange} position="bottom" />
     </section>
   );
+}
+
+function PaginationBar({
+  page,
+  totalPages,
+  totalIsEstimate,
+  hasNextPage,
+  loading,
+  onPageChange,
+  position = "top",
+}: {
+  page: number;
+  totalPages: number;
+  totalIsEstimate: boolean;
+  hasNextPage: boolean;
+  loading: boolean;
+  onPageChange: (page: number) => void;
+  position?: "top" | "bottom";
+}) {
+  return (
+    <div className={`pagination-bar pagination-${position}`}>
+      <span>Page {page} of {totalPages}{totalIsEstimate ? "+" : ""}</span>
+      <div className="actions">
+        <button className="secondary" type="button" disabled={loading || page === 1} onClick={() => onPageChange(page - 1)}>
+          Previous
+        </button>
+        <button className="secondary" type="button" disabled={loading || !hasNextPage} onClick={() => onPageChange(page + 1)}>
+          Next
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function sortOrderLabel(sortBy: string, order: string): string {
+  if (sortBy === "deadline") return order === "asc" ? "Soonest first" : "Latest first";
+  if (sortBy === "created_at") return order === "desc" ? "Newest first" : "Oldest first";
+  if (sortBy === "title" || sortBy === "source") return order === "asc" ? "A to Z" : "Z to A";
+  return order === "desc" ? "Highest first" : "Lowest first";
+}
+
+function catalogSortBy(sortBy: string): string {
+  return ["deadline", "created_at", "source", "title"].includes(sortBy) ? sortBy : "deadline";
+}
+
+function countActiveFilters(filters: FeedFilters): number {
+  return [
+    filters.opportunity_type,
+    filters.country,
+    filters.career_stage,
+    filters.source,
+    filters.status_filter !== "visible" ? filters.status_filter : "",
+    filters.active_only ? "" : "inactive",
+  ].filter((value) => splitList(value).length > 0).length;
 }
 
 function recommendationMatchesFilters(item: Recommendation, filters: FeedFilters): boolean {
@@ -185,6 +293,7 @@ function recommendationMatchesFilters(item: Recommendation, filters: FeedFilters
   const now = new Date();
   const deadline = opportunity.deadline ? new Date(`${opportunity.deadline}T00:00:00`) : null;
 
+  if (!statusMatches(item.user_status, filters.status_filter)) return false;
   if (filters.active_only && deadline && deadline < new Date(now.getFullYear(), now.getMonth(), now.getDate())) return false;
   if (types.length > 0 && !types.includes(opportunity.opportunity_type)) return false;
   if (sources.length > 0 && !sources.includes(opportunity.source.toLowerCase())) return false;
@@ -206,4 +315,19 @@ function recommendationMatchesFilters(item: Recommendation, filters: FeedFilters
 
 function normalizeTerms(value: string): string[] {
   return splitList(value).map((item) => item.toLowerCase());
+}
+
+function statusFilterChange(filters: FeedFilters, status_filter: string): FeedFilters {
+  return {
+    ...filters,
+    status_filter,
+    include_ignored: status_filter === "ignored" || status_filter === "all",
+  };
+}
+
+function statusMatches(status: OpportunityStatus | null, statusFilter: string): boolean {
+  if (statusFilter === "all") return true;
+  if (statusFilter === "visible") return status !== "ignored";
+  if (statusFilter === "ignored") return status === "ignored";
+  return status === statusFilter;
 }

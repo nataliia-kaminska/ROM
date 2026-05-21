@@ -72,11 +72,15 @@ class Settings(BaseSettings):
     advisor_local_base_url: str = "http://localhost:11434/v1"
     advisor_local_model: str = "llama3.1:8b"
     advisor_timeout_seconds: int = 20
+    assistant_web_research_enabled: bool = False
+    assistant_web_research_provider: str = "duckduckgo"
+    assistant_web_research_max_results: int = 3
+    assistant_web_research_timeout_seconds: int = 8
     opportunity_extraction_provider: str = "deterministic"
     opportunity_extraction_model: str = ""
-    opportunity_extraction_timeout_seconds: int = 20
+    opportunity_extraction_timeout_seconds: int = 30
     opportunity_page_enrichment_enabled: bool = True
-    opportunity_page_enrichment_max_chars: int = 5000
+    opportunity_page_enrichment_max_chars: int = 12000
     opportunity_page_enrichment_timeout_seconds: int = 12
     profile_enrichment_auto_openalex: bool = False
     profile_enrichment_provider: str = "deterministic"

@@ -23,6 +23,8 @@ class ExtractedRequirements:
     mobility: str = ""
     citizenship: str = ""
     years_since_phd: int | None = None
+    key_details: list[str] = field(default_factory=list)
+    why_it_matters: list[str] = field(default_factory=list)
     snippets: list[str] = field(default_factory=list)
     confidence: int = 0
 
@@ -84,6 +86,8 @@ def extract_requirements_text(title: str, summary: str, eligibility: str) -> Ext
     requirements.mobility = _snippet(text, r"mobility|relocat|secondment|host institution")
     requirements.citizenship = _snippet(text, r"citizenship|resident|residency|nationality")
     requirements.years_since_phd = _years_since_phd(lower)
+    requirements.key_details = _key_detail_snippets(text)
+    requirements.why_it_matters = _why_it_matters(title, text)
     requirements.snippets = _evidence_snippets(text)
     signals = [
         requirements.career_stages,
@@ -94,6 +98,8 @@ def extract_requirements_text(title: str, summary: str, eligibility: str) -> Ext
         requirements.mobility,
         requirements.citizenship,
         requirements.years_since_phd,
+        requirements.key_details,
+        requirements.why_it_matters,
     ]
     requirements.confidence = min(95, 20 + 10 * sum(1 for signal in signals if signal))
     return requirements
@@ -288,6 +294,37 @@ def _evidence_snippets(text: str) -> list[str]:
     return snippets[:5]
 
 
+def _key_detail_snippets(text: str) -> list[str]:
+    snippets = []
+    for pattern in (
+        r"deadline[^.]*\.",
+        r"funding[^.]*\.",
+        r"grant[^.]*\.",
+        r"fellowship[^.]*\.",
+        r"mobility[^.]*\.",
+        r"host institution[^.]*\.",
+        r"application[^.]*\.",
+    ):
+        snippets.extend(" ".join(match.group(0).split()) for match in re.finditer(pattern, text, re.IGNORECASE))
+    return snippets[:6]
+
+
+def _why_it_matters(title: str, text: str) -> list[str]:
+    lower = f"{title} {text}".casefold()
+    reasons = []
+    if any(term in lower for term in ("mobility", "exchange", "secondment")):
+        reasons.append("Useful for researchers seeking international mobility or a host institution.")
+    if any(term in lower for term in ("doctoral", "phd", "postdoctoral", "postdoc")):
+        reasons.append("Relevant to doctoral or postdoctoral career planning.")
+    if any(term in lower for term in ("horizon", "european", "eu ", "erasmus", "msca")):
+        reasons.append("Connects the profile to European research and funding programmes.")
+    if any(term in lower for term in ("ukraine", "ukrainian")):
+        reasons.append("Potentially relevant for Ukraine-focused eligibility or support.")
+    if any(term in lower for term in ("publication", "papers", "research record")):
+        reasons.append("Publication evidence may strengthen the application.")
+    return reasons[:5]
+
+
 def _extract_with_chat_completion(
     provider: str,
     base_url: str,
@@ -306,7 +343,7 @@ def _extract_with_chat_completion(
             json={
                 "model": model,
                 "temperature": 0,
-                "max_tokens": 900,
+                "max_tokens": 1600,
                 "response_format": {"type": "json_object"},
                 "messages": [
                     {
@@ -314,8 +351,10 @@ def _extract_with_chat_completion(
                         "content": (
                             "Extract structured academic opportunity metadata. Return only valid JSON. "
                             "Use short canonical values. Improve title, summary, and eligibility only from the "
-                            "provided evidence. Do not invent facts. Do not include funder names, agencies, offices, "
-                            "URLs, or source names as keywords or disciplines."
+                            "provided evidence. Be specific and user-facing: summarize what the opportunity funds, "
+                            "who can apply, important restrictions, dates, mobility/host rules, and why a researcher "
+                            "should care. Do not invent facts. Do not include funder names, agencies, offices, URLs, "
+                            "or source names as keywords or disciplines."
                         ),
                     },
                     {
@@ -336,6 +375,14 @@ def _extract_with_chat_completion(
                                     "mobility": "short evidence string",
                                     "citizenship": "short evidence string",
                                     "years_since_phd": 8,
+                                    "key_details": [
+                                        "Funding covers research mobility for doctoral and postdoctoral researchers",
+                                        "Applicants must secure a host institution before applying",
+                                    ],
+                                    "why_it_matters": [
+                                        "Strong fit for researchers seeking EU mobility funding",
+                                        "Useful if the profile has publications in the listed topic area",
+                                    ],
                                     "snippets": ["evidence snippet"],
                                     "confidence": 80,
                                 },
@@ -372,6 +419,8 @@ def _extract_with_chat_completion(
             mobility=_clean_scalar(payload.get("mobility", "")),
             citizenship=_clean_scalar(payload.get("citizenship", "")),
             years_since_phd=payload.get("years_since_phd") if isinstance(payload.get("years_since_phd"), int) else None,
+            key_details=_clean_terms(payload.get("key_details", []), max_items=8, max_length=220),
+            why_it_matters=_clean_terms(payload.get("why_it_matters", []), max_items=6, max_length=220),
             snippets=_clean_terms(payload.get("snippets", []), max_items=5, max_length=180),
             confidence=max(0, min(95, int(payload.get("confidence", 0) or 0))),
         )
@@ -401,6 +450,8 @@ def _merge_requirements(left: ExtractedRequirements, right: ExtractedRequirement
         mobility=right.mobility or left.mobility,
         citizenship=right.citizenship or left.citizenship,
         years_since_phd=right.years_since_phd if right.years_since_phd is not None else left.years_since_phd,
+        key_details=_merge_terms(left.key_details, right.key_details, max_items=8),
+        why_it_matters=_merge_terms(left.why_it_matters, right.why_it_matters, max_items=6),
         snippets=_merge_terms(left.snippets, right.snippets, max_items=5),
         confidence=max(left.confidence, right.confidence),
     )

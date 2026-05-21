@@ -8,7 +8,7 @@ from app.modules.opportunities.mappers import to_opportunity_read
 from app.repositories import admin as admin_repository
 from app.schemas.admin import AdminAnalyticsRead, AdminAuditLogRead, AdminDashboardRead, DuplicateMergeRequest, DuplicateOpportunityGroup
 from app.schemas.opportunities import OpportunityCreate, OpportunityRead
-from app.services.admin_ops import build_admin_analytics, duplicate_groups, log_admin_action
+from app.services.admin_ops import build_admin_analytics, build_admin_health, duplicate_groups, log_admin_action
 from app.services.admin_merge import merge_duplicate_opportunities
 from app.services.opportunity_import import apply_opportunity_payload
 
@@ -23,6 +23,7 @@ def dashboard(db: Session = Depends(get_db)) -> AdminDashboardRead:
         recent_batches=admin_repository.list_recent_batches(db),
         failed_batches=admin_repository.list_failed_batches(db),
         analytics=build_admin_analytics(db),
+        health=build_admin_health(db),
     )
 
 

@@ -5,6 +5,7 @@ import { BoardView } from "../views/BoardView";
 import { DashboardView } from "../views/DashboardView";
 import { FeedView } from "../views/FeedView";
 import { NotificationsView } from "../views/NotificationsView";
+import { OpportunityDetailsView } from "../views/OpportunityDetailsView";
 import { OrcidCallbackView } from "../views/OrcidCallbackView";
 import { ProfileView } from "../views/ProfileView";
 import { RemindersView } from "../views/RemindersView";
@@ -63,12 +64,31 @@ export function WorkspaceRoutes({
           opportunities={workspace.opportunities}
           page={workspace.matchesPage}
           hasNextPage={workspace.matchesHasNextPage}
+          totalPages={workspace.matchesTotalPages}
+          totalIsEstimate={workspace.matchesTotalIsEstimate}
           onFiltersChange={workspace.onFiltersChange}
           onResetFilters={workspace.onResetFilters}
           onPageChange={workspace.onMatchesPageChange}
           onViewChange={route.onViewChange}
           onSelectOpportunity={workspace.onSelectOpportunity}
           onStatus={workspace.onStatus}
+        />
+      );
+    case "opportunity":
+      return (
+        <OpportunityDetailsView
+          opportunity={workspace.opportunitiesById.get(route.opportunityId ?? 0) ?? null}
+          recommendation={workspace.recommendations.find((item) => item.opportunity.id === route.opportunityId) ?? null}
+          reminders={workspace.reminders.filter((reminder) => reminder.opportunity_id === route.opportunityId)}
+          assistantResult={assistant.assistantResult}
+          status={workspace.statuses.find((item) => item.opportunity_id === route.opportunityId) ?? null}
+          canTrack={Boolean(workspace.activeProfile)}
+          onStatus={workspace.onStatus}
+          onViewChange={route.onViewChange}
+          onAssistantSelect={(opportunityId) => {
+            assistant.onAssistantFormChange({ opportunity_id: String(opportunityId) });
+            route.onViewChange("assistant");
+          }}
         />
       );
     case "profile":
@@ -85,6 +105,7 @@ export function WorkspaceRoutes({
           countryOptions={workspace.countryOptions}
           orcidForm={profile.orcidForm}
           openAlexForm={profile.openAlexForm}
+          openAlexPreview={profile.openAlexPreview}
           highlightFields={profile.highlightFields}
           onProfileChange={profile.onProfileChange}
           onDetailsChange={profile.onDetailsChange}
@@ -95,6 +116,7 @@ export function WorkspaceRoutes({
           onOpenAlexChange={profile.onOpenAlexChange}
           onImportOrcid={profile.onImportOrcid}
           onImportOpenAlex={profile.onImportOpenAlex}
+          onPreviewOpenAlex={profile.onPreviewOpenAlex}
         />
       );
     case "board":
@@ -103,6 +125,7 @@ export function WorkspaceRoutes({
           statuses={workspace.statuses}
           opportunitiesById={workspace.opportunitiesById}
           onSelectOpportunity={workspace.onSelectOpportunity}
+          onStatus={workspace.onStatus}
         />
       );
     case "reminders":
@@ -133,6 +156,7 @@ export function WorkspaceRoutes({
         <AssistantView
           assistantForm={assistant.assistantForm}
           assistantResult={assistant.assistantResult}
+          assistantLoading={assistant.assistantLoading}
           reminderEligibleOpportunities={workspace.reminderEligibleOpportunities}
           onAssistantFormChange={assistant.onAssistantFormChange}
           onGenerate={assistant.onGenerateAssistant}

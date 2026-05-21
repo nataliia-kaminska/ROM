@@ -1,10 +1,10 @@
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useMemo, useRef, useState } from "react";
 import { api } from "../api";
-import { defaultFilters, reminderStatuses, type DetailTab } from "../constants";
+import { defaultFilters, reminderStatuses } from "../constants";
 import type { Opportunity, OpportunityStatus, Profile, Recommendation, Reminder, StatusRecord } from "../types";
 import { label } from "../utils/format";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 18;
 
 export function useWorkspace({
   token,
@@ -23,22 +23,36 @@ export function useWorkspace({
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [matchesPage, setMatchesPage] = useState(1);
   const [matchesHasNextPage, setMatchesHasNextPage] = useState(false);
+  const [matchesTotalPages, setMatchesTotalPages] = useState(1);
+  const [matchesTotalIsEstimate, setMatchesTotalIsEstimate] = useState(false);
   const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
-  const [detailTab, setDetailTab] = useState<DetailTab>("overview");
   const [statuses, setStatuses] = useState<StatusRecord[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [filterOptions, setFilterOptions] = useState({ sources: [] as string[], countries: [] as string[], keywords: [] as string[], disciplines: [] as string[], career_stages: [] as string[] });
   const [reminderForm, setReminderForm] = useState({ opportunity_id: "", remind_on: "", message: "" });
+  const loadedWorkspaceKey = useRef("");
+  const requestSequence = useRef(0);
   const selectedStatusIds = useMemo(
     () => new Set(statuses.filter((record) => reminderStatuses.includes(record.status)).map((record) => record.opportunity_id)),
     [statuses],
   );
 
-  async function refreshWorkspace(profile = activeProfile, nextFilters = filters, page = matchesPage) {
+  async function refreshWorkspace(
+    profile = activeProfile,
+    nextFilters = filters,
+    page = matchesPage,
+    options: { force?: boolean } = {},
+  ) {
+    const workspaceKey = buildWorkspaceKey(token, profile?.id ?? null, nextFilters, page);
+    if (!options.force && loadedWorkspaceKey.current === workspaceKey && (recommendations.length > 0 || opportunities.length > 0)) {
+      return;
+    }
+    const sequence = requestSequence.current + 1;
+    requestSequence.current = sequence;
     setError("");
     setWorkspaceLoading(true);
     try {
-      const limit = PAGE_SIZE + 1;
+      const limit = PAGE_SIZE;
       const offset = (page - 1) * PAGE_SIZE;
       const opportunityQuery = {
         keyword: nextFilters.keyword,
@@ -47,12 +61,15 @@ export function useWorkspace({
         career_stage: nextFilters.career_stage,
         source: nextFilters.source,
         active_only: nextFilters.active_only,
+        sort_by: nextFilters.sort_by === "match_score" || nextFilters.sort_by === "semantic_score" || nextFilters.sort_by === "readiness_score" ? "deadline" : nextFilters.sort_by,
+        sort_order: nextFilters.sort_order,
         limit,
         offset,
       };
-      const catalogPromise = api.opportunities(opportunityQuery);
+      const catalogPromise = api.opportunitiesPage(opportunityQuery);
       void loadFilterOptions();
       if (token && profile) {
+        const recommendationLimit = PAGE_SIZE + 1;
         const recommendationPromise = api
           .recommendations(token, profile.id, {
             min_score: nextFilters.min_score,
@@ -63,34 +80,49 @@ export function useWorkspace({
             career_stage: nextFilters.career_stage,
             source: nextFilters.source,
             active_only: nextFilters.active_only,
-            limit,
+            sort_by: nextFilters.sort_by,
+            sort_order: nextFilters.sort_order,
+            limit: recommendationLimit,
             offset,
           })
           .catch((recommendationError) => {
             setError(`Personalized matching is temporarily unavailable. Showing catalog results instead. ${(recommendationError as Error).message}`);
             return [] as Recommendation[];
           });
-        const [nextRecommendations, nextStatuses, nextReminders, nextOpportunities] = await Promise.all([
+        const [nextRecommendations, nextStatuses, nextReminders, nextOpportunitiesPage] = await Promise.all([
           recommendationPromise,
           api.statuses(token, profile.id),
           api.reminders(token, profile.id, true),
           catalogPromise,
         ]);
+        if (requestSequence.current !== sequence) return;
+        const hasPersonalizedResults = nextRecommendations.length > 0;
+        const hasMoreRecommendations = nextRecommendations.length > PAGE_SIZE;
+        const total = hasPersonalizedResults ? offset + nextRecommendations.length : nextOpportunitiesPage.total;
         setRecommendations(nextRecommendations.slice(0, PAGE_SIZE));
         setStatuses(nextStatuses);
         setReminders(nextReminders);
-        setOpportunities(nextOpportunities.slice(0, PAGE_SIZE));
-        setMatchesHasNextPage((nextRecommendations.length > 0 ? nextRecommendations : nextOpportunities).length > PAGE_SIZE);
+        setOpportunities(nextOpportunitiesPage.items);
+        setMatchesHasNextPage(hasPersonalizedResults ? hasMoreRecommendations : offset + PAGE_SIZE < total);
+        setMatchesTotalPages(hasPersonalizedResults ? page + (hasMoreRecommendations ? 1 : 0) : Math.max(1, Math.ceil(total / PAGE_SIZE)));
+        setMatchesTotalIsEstimate(hasPersonalizedResults && hasMoreRecommendations);
       } else {
-        const nextOpportunities = await catalogPromise;
-        setOpportunities(nextOpportunities.slice(0, PAGE_SIZE));
-        setMatchesHasNextPage(nextOpportunities.length > PAGE_SIZE);
+        const nextOpportunitiesPage = await catalogPromise;
+        if (requestSequence.current !== sequence) return;
+        setOpportunities(nextOpportunitiesPage.items);
+        setMatchesHasNextPage(offset + PAGE_SIZE < nextOpportunitiesPage.total);
+        setMatchesTotalPages(Math.max(1, Math.ceil(nextOpportunitiesPage.total / PAGE_SIZE)));
+        setMatchesTotalIsEstimate(false);
       }
       setMatchesPage(page);
+      loadedWorkspaceKey.current = workspaceKey;
     } catch (workspaceError) {
+      if (requestSequence.current !== sequence) return;
       setError((workspaceError as Error).message);
     } finally {
-      setWorkspaceLoading(false);
+      if (requestSequence.current === sequence) {
+        setWorkspaceLoading(false);
+      }
     }
   }
 
@@ -114,8 +146,11 @@ export function useWorkspace({
     setStatuses([]);
     setReminders([]);
     setSelectedOpportunity(null);
+    loadedWorkspaceKey.current = "";
     setMatchesPage(1);
     setMatchesHasNextPage(false);
+    setMatchesTotalPages(1);
+    setMatchesTotalIsEstimate(false);
   }
 
   async function loadFilterOptions(force = false) {
@@ -139,7 +174,7 @@ export function useWorkspace({
       setRecommendations((current) =>
         current.map((item) => (item.opportunity.id === opportunityId ? { ...item, user_status: status } : item)),
       );
-      setNotice(`Marked as ${label(status)}`);
+      setNotice(`Opportunity moved to ${label(status)}.`);
     } catch (statusError) {
       setError((statusError as Error).message);
     }
@@ -158,14 +193,14 @@ export function useWorkspace({
     }
     setError("");
     try {
-      await api.createReminder(token, activeProfile.id, {
+      const reminder = await api.createReminder(token, activeProfile.id, {
         opportunity_id: Number(reminderForm.opportunity_id),
         remind_on: reminderForm.remind_on,
         message: reminderForm.message,
       });
       setReminderForm({ opportunity_id: "", remind_on: "", message: "" });
+      setReminders((current) => [...current.filter((item) => item.id !== reminder.id), reminder]);
       setNotice("Reminder created");
-      await refreshWorkspace(activeProfile);
     } catch (reminderError) {
       setError((reminderError as Error).message);
     }
@@ -175,9 +210,9 @@ export function useWorkspace({
     if (!token || !activeProfile) return;
     setError("");
     try {
-      await api.completeReminder(token, activeProfile.id, reminderId);
+      const reminder = await api.completeReminder(token, activeProfile.id, reminderId);
+      setReminders((current) => current.map((item) => (item.id === reminderId ? reminder : item)));
       setNotice("Reminder completed");
-      await refreshWorkspace(activeProfile);
     } catch (reminderError) {
       setError((reminderError as Error).message);
     }
@@ -191,7 +226,8 @@ export function useWorkspace({
     selectedOpportunity,
     matchesPage,
     matchesHasNextPage,
-    detailTab,
+    matchesTotalPages,
+    matchesTotalIsEstimate,
     statuses,
     reminders,
     filterOptions,
@@ -200,7 +236,6 @@ export function useWorkspace({
     setFilters,
     setRecommendations,
     setSelectedOpportunity,
-    setDetailTab,
     setReminderForm,
     refreshWorkspace,
     resetFilters,
@@ -211,4 +246,18 @@ export function useWorkspace({
     createReminder,
     completeReminder,
   };
+}
+
+function buildWorkspaceKey(
+  token: string | null,
+  profileId: number | null,
+  filters: typeof defaultFilters,
+  page: number,
+): string {
+  return JSON.stringify({
+    auth: Boolean(token),
+    profileId,
+    page,
+    filters,
+  });
 }

@@ -90,7 +90,7 @@ if (-not $redisReady -and $RequireBackground) {
     throw "Redis is required for worker/scheduler but is not reachable on 127.0.0.1:6379. Start Redis or run without -RequireBackground."
 }
 
-Start-AppProcess -Title "ROM backend :8000" -WorkingDirectory $Root -Command ".\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000"
+Start-AppProcess -Title "ROM backend :8000" -WorkingDirectory $Root -Command ".\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --reload-dir app --reload-dir migrations --host 127.0.0.1 --port 8000"
 Start-AppProcess -Title "ROM frontend :3000" -WorkingDirectory $Frontend -Command "npm run dev"
 
 if (-not $SkipWorker -and $redisReady) {

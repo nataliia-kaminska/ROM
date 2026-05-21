@@ -1,4 +1,4 @@
-def test_profile_can_save_opportunity_status(client):
+def test_profile_can_save_opportunity_status(client, admin_headers):
     profile_response = client.post(
         "/profiles",
         json={
@@ -10,6 +10,7 @@ def test_profile_can_save_opportunity_status(client):
     )
     opportunity_response = client.post(
         "/opportunities",
+        headers=admin_headers,
         json={
             "title": "Materials Science Fellowship",
             "opportunity_type": "fellowship",

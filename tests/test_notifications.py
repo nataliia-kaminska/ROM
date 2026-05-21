@@ -14,6 +14,10 @@ def _register(client):
     return {"Authorization": f"Bearer {token}"}
 
 
+def _current_user_id(client, headers: dict[str, str]) -> int:
+    return client.get("/auth/me", headers=headers).json()["id"]
+
+
 def test_notification_preferences_and_unsubscribe(client):
     headers = _register(client)
 
@@ -40,7 +44,7 @@ def test_notification_preferences_and_unsubscribe(client):
     assert unsubscribed.json()["email_enabled"] is False
 
 
-def test_reminder_email_job_records_notification(client, monkeypatch):
+def test_reminder_email_job_records_notification(client, monkeypatch, admin_headers):
     headers = _register(client)
     profile = client.post(
         "/profiles",
@@ -54,6 +58,7 @@ def test_reminder_email_job_records_notification(client, monkeypatch):
     ).json()
     opportunity = client.post(
         "/opportunities",
+        headers=admin_headers,
         json={
             "title": "Deadline Grant",
             "opportunity_type": "grant",
@@ -106,7 +111,7 @@ def test_notification_mark_read(client, monkeypatch):
     assert read_response.status_code in {200, 404}
 
 
-def test_weekly_digest_job_records_notification(client, monkeypatch):
+def test_weekly_digest_job_records_notification(client, monkeypatch, admin_headers):
     headers = _register(client)
     profile = client.post(
         "/profiles",
@@ -121,6 +126,7 @@ def test_weekly_digest_job_records_notification(client, monkeypatch):
     ).json()
     client.post(
         "/opportunities",
+        headers=admin_headers,
         json={
             "title": "Machine Learning Grant",
             "opportunity_type": "grant",
@@ -133,14 +139,14 @@ def test_weekly_digest_job_records_notification(client, monkeypatch):
     )
     monkeypatch.setattr("app.workers.jobs.SessionLocal", app.state.testing_session_factory)
 
-    result = send_weekly_digest_job()
+    result = send_weekly_digest_job(user_id=_current_user_id(client, headers))
 
     assert result["processed"] == 1
     response = client.get("/notifications?include_read=true", headers=headers)
     assert any(item["notification_type"] == "weekly_digest" for item in response.json())
 
 
-def test_high_match_alert_job_respects_threshold(client, monkeypatch):
+def test_high_match_alert_job_respects_threshold(client, monkeypatch, admin_headers):
     headers = _register(client)
     client.put(
         "/notifications/preferences",
@@ -166,6 +172,7 @@ def test_high_match_alert_job_respects_threshold(client, monkeypatch):
     ).json()
     client.post(
         "/opportunities",
+        headers=admin_headers,
         json={
             "title": "Quantum Fellowship",
             "opportunity_type": "fellowship",
@@ -178,14 +185,14 @@ def test_high_match_alert_job_respects_threshold(client, monkeypatch):
     )
     monkeypatch.setattr("app.workers.jobs.SessionLocal", app.state.testing_session_factory)
 
-    result = send_high_match_alerts_job()
+    result = send_high_match_alerts_job(user_id=_current_user_id(client, headers))
 
     assert result["processed"] == 1
     response = client.get("/notifications?include_read=true", headers=headers)
     assert any(item["notification_type"] == "high_match_alert" for item in response.json())
 
 
-def test_delivery_failure_is_recorded(client, monkeypatch):
+def test_delivery_failure_is_recorded(client, monkeypatch, admin_headers):
     class FailingProvider:
         def send(self, recipient: str, subject: str, body: str):
             from app.services.email_delivery import EmailDeliveryResult
@@ -200,6 +207,7 @@ def test_delivery_failure_is_recorded(client, monkeypatch):
     ).json()
     opportunity = client.post(
         "/opportunities",
+        headers=admin_headers,
         json={
             "title": "Failure Grant",
             "opportunity_type": "grant",

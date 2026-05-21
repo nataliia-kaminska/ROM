@@ -24,9 +24,61 @@ def list_opportunities(
     career_stage: str | None = None,
     keyword: str | None = None,
     active_only: bool = False,
+    sort_by: str = "deadline",
+    sort_order: str = "asc",
     limit: int = 50,
     offset: int = 0,
 ) -> list[Opportunity]:
+    query, countries, career_stages = _base_query_and_post_filters(
+        db,
+        source=source,
+        opportunity_type=opportunity_type,
+        country=country,
+        career_stage=career_stage,
+        keyword=keyword,
+        active_only=active_only,
+    )
+    query = _apply_sort(query, sort_by, sort_order)
+    if not countries and not career_stages:
+        return query.offset(offset).limit(limit).all()
+
+    opportunities = query.all()
+    opportunities = _apply_post_filters(opportunities, countries, career_stages)
+    return opportunities[offset : offset + limit]
+
+
+def count_opportunities(
+    db: Session,
+    source: str | None = None,
+    opportunity_type: OpportunityType | str | None = None,
+    country: str | None = None,
+    career_stage: str | None = None,
+    keyword: str | None = None,
+    active_only: bool = False,
+) -> int:
+    query, countries, career_stages = _base_query_and_post_filters(
+        db,
+        source=source,
+        opportunity_type=opportunity_type,
+        country=country,
+        career_stage=career_stage,
+        keyword=keyword,
+        active_only=active_only,
+    )
+    if not countries and not career_stages:
+        return query.count()
+    return len(_apply_post_filters(query.all(), countries, career_stages))
+
+
+def _base_query_and_post_filters(
+    db: Session,
+    source: str | None = None,
+    opportunity_type: OpportunityType | str | None = None,
+    country: str | None = None,
+    career_stage: str | None = None,
+    keyword: str | None = None,
+    active_only: bool = False,
+) -> tuple:
     query = db.query(Opportunity)
     sources = _split_terms(source)
     opportunity_types = _opportunity_types(opportunity_type)
@@ -53,12 +105,30 @@ def list_opportunities(
     if active_only:
         query = query.filter((Opportunity.deadline.is_(None)) | (Opportunity.deadline >= date.today()))
 
-    opportunities = query.order_by(Opportunity.deadline.asc().nullslast()).all()
+    return query, countries, career_stages
+
+
+def _apply_post_filters(opportunities: list[Opportunity], countries: list[str], career_stages: list[str]) -> list[Opportunity]:
     if countries:
         opportunities = [item for item in opportunities if _contains_any_term(item.countries, countries)]
     if career_stages:
         opportunities = [item for item in opportunities if _contains_any_term(item.career_stages, career_stages)]
-    return opportunities[offset : offset + limit]
+    return opportunities
+
+
+def _apply_sort(query, sort_by: str, sort_order: str):
+    descending = sort_order.casefold() == "desc"
+    if sort_by == "created_at":
+        column = Opportunity.created_at
+        return query.order_by(column.desc() if descending else column.asc(), Opportunity.id.desc())
+    if sort_by == "title":
+        column = func.lower(Opportunity.title)
+        return query.order_by(column.desc() if descending else column.asc(), Opportunity.id.desc())
+    if sort_by == "source":
+        column = func.lower(Opportunity.source)
+        return query.order_by(column.desc() if descending else column.asc(), Opportunity.title.asc())
+    column = Opportunity.deadline
+    return query.order_by(column.desc().nullslast() if descending else column.asc().nullslast(), Opportunity.created_at.desc())
 
 
 def _exclude_generic_provider_records(query):

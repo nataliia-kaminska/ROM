@@ -60,6 +60,20 @@ export type ProfileDetails = {
   max_duration_months: number | null;
 };
 
+export type OpenAlexPreview = {
+  display_name: string;
+  summary: string;
+  concepts: string[];
+  works: string[];
+  openalex_author_id: string | null;
+  suggested_disciplines: string[];
+  suggested_keywords: string[];
+  suggested_funding_interests: string[];
+  new_publications: string[];
+  existing_publications: number;
+  works_count: number;
+};
+
 export type Opportunity = {
   id: number;
   title: string;
@@ -73,6 +87,7 @@ export type Opportunity = {
   countries: string[];
   career_stages: string[];
   deadline: string | null;
+  created_at?: string | null;
   extracted_requirements?: {
     career_stages: string[];
     countries: string[];
@@ -82,6 +97,8 @@ export type Opportunity = {
     mobility: string;
     citizenship: string;
     years_since_phd: number | null;
+    key_details?: string[];
+    why_it_matters?: string[];
     snippets: string[];
     confidence: number;
   } | null;
@@ -94,6 +111,13 @@ export type OpportunityFilterOptions = {
   keywords: string[];
   disciplines: string[];
   career_stages: string[];
+};
+
+export type PaginatedResponse<T> = {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
 };
 
 export type Recommendation = {
@@ -174,7 +198,10 @@ export type NotificationPreference = {
 export type ApplicationAssistantResult = {
   opportunity_id: number;
   profile_id: number;
+  profile_name: string;
+  opportunity_title: string;
   retrieved_context: string[];
+  web_research: string[];
   application_checklist: string[];
   motivation_letter_outline: string[];
   research_fit_statement: string;

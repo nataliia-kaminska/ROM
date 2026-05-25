@@ -192,6 +192,12 @@
   color: var(--muted);
 }
 
+.added-pill {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 800;
+}
+
 .chips span,
 .meta span {
   background: var(--soft-green);
@@ -209,10 +215,60 @@
   color: var(--text);
 }
 
+.chips .status-browsing {
+  background: #f8f5ed;
+  border-color: #ded6c4;
+  color: var(--muted);
+}
+
 .chips .status-ignored {
   background: #fff1e8;
   border-color: #e8b991;
   color: #8a4b1f;
+}
+
+.status-saved,
+.chips .status-saved,
+.meta .status-saved {
+  background: #e8f2ff;
+  border-color: #b9d5f5;
+  color: #214b76;
+}
+
+.status-planned,
+.chips .status-planned,
+.meta .status-planned {
+  background: #f0ebff;
+  border-color: #cfc2f2;
+  color: #51407d;
+}
+
+.status-applied,
+.chips .status-applied,
+.meta .status-applied {
+  background: #e5f3dd;
+  border-color: #b8d7a7;
+  color: #315f2f;
+}
+
+.status-accepted,
+.chips .status-accepted,
+.meta .status-accepted {
+  background: #e4f7ef;
+  border-color: #a7dcc6;
+  color: #1e6b51;
+}
+
+.status-rejected,
+.chips .status-rejected,
+.meta .status-rejected {
+  background: #fae8e2;
+  border-color: #e6b7a9;
+  color: #82331f;
+}
+
+.assistant-drawer-button {
+  margin-left: auto;
 }
 
 .score-grid {
@@ -260,6 +316,27 @@
   background: #ece5d8;
   border-radius: 999px;
   overflow: hidden;
+}
+
+.completeness {
+  position: relative;
+}
+
+.completeness[data-tip]:hover::after,
+.completeness[data-tip]:focus-within::after {
+  background: #16201c;
+  border-radius: var(--radius);
+  bottom: calc(100% + var(--space-2));
+  color: #f7f4ec;
+  content: attr(data-tip);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  left: 0;
+  line-height: 1.35;
+  max-width: 280px;
+  padding: var(--space-2) var(--space-3);
+  position: absolute;
+  z-index: 20;
 }
 
 .score-bar div {
@@ -524,4 +601,40 @@
   right: var(--space-5);
   top: var(--space-5);
   width: 36px;
+}
+
+.page-header {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--section-gap);
+  justify-content: space-between;
+  margin-bottom: var(--section-gap);
+}
+
+.page-header h1 {
+  font-size: var(--text-2xl);
+  margin-bottom: var(--space-1);
+}
+
+.page-header p {
+  color: var(--text-soft);
+  margin: 0;
+  max-width: 780px;
+}
+
+.page-header-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.drawer-primary-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.drawer-primary-actions .card-action-note {
+  grid-column: 1 / -1;
 }

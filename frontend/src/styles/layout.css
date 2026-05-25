@@ -37,6 +37,18 @@
   height: 1px;
 }
 
+.auth-panel .ghost {
+  border-color: var(--border);
+  color: var(--primary);
+  text-align: center;
+  text-transform: none;
+}
+
+.auth-panel .ghost:hover {
+  background: var(--soft-green);
+  border-color: var(--border-strong);
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 272px 1fr;
@@ -139,11 +151,16 @@ nav a:active,
 }
 
 .account-summary {
-  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  background: transparent;
+  border: 1px solid transparent;
+  border-top-color: rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius);
   color: #f7f4ec;
   display: grid;
   gap: var(--space-1);
-  padding-top: var(--space-4);
+  padding: var(--space-3);
+  text-align: left;
+  white-space: normal;
 }
 
 .sidebar-footer {
@@ -157,17 +174,44 @@ nav a:active,
   overflow-wrap: anywhere;
 }
 
+.account-summary:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
 .account-summary small {
   color: #bfcfc8;
   font-size: var(--text-xs);
-  text-transform: capitalize;
+  text-transform: none;
+}
+
+.sidebar .completeness {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
+  gap: var(--space-2);
+  grid-template-columns: 1fr;
+  min-height: auto;
+  padding: var(--space-3);
+}
+
+.sidebar .completeness div:first-child {
+  gap: var(--space-2);
+}
+
+.sidebar .completeness span {
+  color: #bfcfc8;
+  font-size: var(--text-xs);
+}
+
+.sidebar .completeness strong {
+  color: #f7f4ec;
 }
 
 .workspace {
   display: grid;
   align-content: start;
   gap: var(--content-gap);
-  padding: var(--page-padding);
+  padding: var(--page-padding) clamp(var(--space-6), 8vw, 10vw);
 }
 
 .topbar,

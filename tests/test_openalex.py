@@ -7,16 +7,17 @@ AUTHOR = {
     "id": "https://openalex.org/A123",
     "display_name": "Ada Kovalenko",
     "works_count": 42,
+    "last_known_institutions": [{"display_name": "Kyiv Academic Institute"}],
     "x_concepts": [
-        {"display_name": "Machine learning"},
-        {"display_name": "Bioinformatics"},
+        {"display_name": "Machine learning", "level": 1, "score": 0.82},
+        {"display_name": "Bioinformatics", "level": 1, "score": 0.77},
     ],
 }
 
 WORKS = [
     {
         "display_name": "Graph neural networks for genomics",
-        "concepts": [{"display_name": "Genomics"}],
+        "concepts": [{"display_name": "Genomics", "level": 2, "score": 0.66}],
     }
 ]
 
@@ -27,6 +28,7 @@ def test_extract_openalex_profile_payload():
     assert payload["display_name"] == "Ada Kovalenko"
     assert payload["openalex_author_id"] == "https://openalex.org/A123"
     assert "Machine learning" in payload["concepts"]
+    assert "Kyiv Academic Institute" in payload["summary"]
     assert "Graph neural networks for genomics" in payload["works"]
 
 
@@ -62,7 +64,7 @@ def test_openalex_import_enriches_profile_details(client, monkeypatch):
     assert "Bioinformatics" in body["profile"]["keywords"]
     assert "Bioinformatics" in body["profile"]["disciplines"]
     assert "Graph neural networks for genomics" in body["details"]["publications"]
-    assert "Genomics" in body["details"]["funding_interests"]
+    assert "Genomics research" in body["details"]["funding_interests"]
 
 
 def test_openalex_preview_shows_merge_plan_without_persisting(client, monkeypatch):

@@ -76,6 +76,22 @@ def orcid_placeholder_email(orcid_id: str) -> str:
     return f"orcid-{orcid_id.replace('-', '')}@example.com"
 
 
+def email_from_token(payload: dict[str, Any]) -> str | None:
+    direct_email = str(payload.get("email") or "").strip().lower()
+    if direct_email:
+        return direct_email
+    emails = payload.get("emails")
+    if isinstance(emails, list):
+        for item in emails:
+            if isinstance(item, dict):
+                value = str(item.get("email") or item.get("value") or "").strip().lower()
+                if value:
+                    return value
+            elif isinstance(item, str) and item.strip():
+                return item.strip().lower()
+    return None
+
+
 def display_name_from_token(payload: dict[str, Any]) -> str:
     name = str(payload.get("name") or "").strip()
     if name:

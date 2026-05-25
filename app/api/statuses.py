@@ -65,3 +65,19 @@ def list_opportunity_statuses(
 ) -> list[ProfileOpportunityStatusRead]:
     ensure_profile_access(profile_repository.get_profile(db, profile_id), current_user)
     return workflow_repository.list_profile_statuses_recent(db, profile_id)
+
+
+@router.delete("/{opportunity_id}/status", status_code=status.HTTP_204_NO_CONTENT)
+def clear_opportunity_status(
+    profile_id: int,
+    opportunity_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_optional_current_user),
+) -> None:
+    ensure_profile_access(profile_repository.get_profile(db, profile_id), current_user)
+    existing = workflow_repository.get_profile_opportunity_status(db, profile_id, opportunity_id)
+    if existing is None:
+        return None
+    db.delete(existing)
+    db.commit()
+    return None

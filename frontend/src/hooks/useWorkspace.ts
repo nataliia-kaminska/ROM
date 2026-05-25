@@ -1,7 +1,7 @@
 import { type FormEvent, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { defaultFilters, reminderStatuses } from "../constants";
-import type { Opportunity, OpportunityStatus, Profile, Recommendation, Reminder, StatusRecord } from "../types";
+import type { DisplayOpportunityStatus, Opportunity, Profile, Recommendation, Reminder, StatusRecord } from "../types";
 import { label } from "../utils/format";
 
 const PAGE_SIZE = 18;
@@ -21,6 +21,7 @@ export function useWorkspace({
   const [filters, setFiltersState] = useState(defaultFilters);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [trackedOpportunities, setTrackedOpportunities] = useState<Opportunity[]>([]);
   const [matchesPage, setMatchesPage] = useState(1);
   const [matchesHasNextPage, setMatchesHasNextPage] = useState(false);
   const [matchesTotalPages, setMatchesTotalPages] = useState(1);
@@ -32,9 +33,10 @@ export function useWorkspace({
   const [reminderForm, setReminderForm] = useState({ opportunity_id: "", remind_on: "", message: "" });
   const loadedWorkspaceKey = useRef("");
   const requestSequence = useRef(0);
+  const currentStatuses = useMemo(() => latestStatusesByOpportunity(statuses), [statuses]);
   const selectedStatusIds = useMemo(
-    () => new Set(statuses.filter((record) => reminderStatuses.includes(record.status)).map((record) => record.opportunity_id)),
-    [statuses],
+    () => new Set(currentStatuses.filter((record) => reminderStatuses.includes(record.status)).map((record) => record.opportunity_id)),
+    [currentStatuses],
   );
 
   async function refreshWorkspace(
@@ -96,12 +98,18 @@ export function useWorkspace({
           catalogPromise,
         ]);
         if (requestSequence.current !== sequence) return;
+        const nextTrackedOpportunities = await loadTrackedOpportunities(
+          nextStatuses,
+          [...nextOpportunitiesPage.items, ...nextRecommendations.map((item) => item.opportunity)],
+        );
+        if (requestSequence.current !== sequence) return;
         const hasPersonalizedResults = nextRecommendations.length > 0;
         const hasMoreRecommendations = nextRecommendations.length > PAGE_SIZE;
         const total = hasPersonalizedResults ? offset + nextRecommendations.length : nextOpportunitiesPage.total;
         setRecommendations(nextRecommendations.slice(0, PAGE_SIZE));
         setStatuses(nextStatuses);
         setReminders(nextReminders);
+        setTrackedOpportunities(nextTrackedOpportunities);
         setOpportunities(nextOpportunitiesPage.items);
         setMatchesHasNextPage(hasPersonalizedResults ? hasMoreRecommendations : offset + PAGE_SIZE < total);
         setMatchesTotalPages(hasPersonalizedResults ? page + (hasMoreRecommendations ? 1 : 0) : Math.max(1, Math.ceil(total / PAGE_SIZE)));
@@ -145,6 +153,7 @@ export function useWorkspace({
     setRecommendations([]);
     setStatuses([]);
     setReminders([]);
+    setTrackedOpportunities([]);
     setSelectedOpportunity(null);
     loadedWorkspaceKey.current = "";
     setMatchesPage(1);
@@ -162,10 +171,19 @@ export function useWorkspace({
     }
   }
 
-  async function updateStatus(opportunityId: number, status: OpportunityStatus) {
+  async function updateStatus(opportunityId: number, status: DisplayOpportunityStatus) {
     if (!token || !activeProfile) return;
     setError("");
     try {
+      if (status === "browsing") {
+        await api.clearStatus(token, activeProfile.id, opportunityId);
+        setStatuses((current) => current.filter((item) => item.opportunity_id !== opportunityId));
+        setRecommendations((current) =>
+          current.map((item) => (item.opportunity.id === opportunityId ? { ...item, user_status: null } : item)),
+        );
+        setNotice("Opportunity moved back to browsing.");
+        return;
+      }
       const updated = await api.setStatus(token, activeProfile.id, opportunityId, status);
       setStatuses((current) => {
         const others = current.filter((item) => item.opportunity_id !== opportunityId);
@@ -223,6 +241,7 @@ export function useWorkspace({
     filters,
     recommendations,
     opportunities,
+    trackedOpportunities,
     selectedOpportunity,
     matchesPage,
     matchesHasNextPage,
@@ -246,6 +265,32 @@ export function useWorkspace({
     createReminder,
     completeReminder,
   };
+}
+
+async function loadTrackedOpportunities(statuses: StatusRecord[], knownOpportunities: Opportunity[]): Promise<Opportunity[]> {
+  const knownIds = new Set(knownOpportunities.map((opportunity) => opportunity.id));
+  const missingIds = latestStatusesByOpportunity(statuses)
+    .map((status) => status.opportunity_id)
+    .filter((id, index, ids) => !knownIds.has(id) && ids.indexOf(id) === index);
+  const loaded = await Promise.all(
+    missingIds.map((id) =>
+      api
+        .opportunity(id)
+        .catch(() => null),
+    ),
+  );
+  return loaded.filter((opportunity): opportunity is Opportunity => Boolean(opportunity));
+}
+
+function latestStatusesByOpportunity(statuses: StatusRecord[]): StatusRecord[] {
+  const byOpportunity = new Map<number, StatusRecord>();
+  for (const status of statuses) {
+    const current = byOpportunity.get(status.opportunity_id);
+    if (!current || status.id > current.id) {
+      byOpportunity.set(status.opportunity_id, status);
+    }
+  }
+  return [...byOpportunity.values()];
 }
 
 function buildWorkspaceKey(

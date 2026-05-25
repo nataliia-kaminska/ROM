@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { ApplicationAssistantResult, Opportunity } from "../types";
-import { EmptyState, HelpTip } from "../components/ui";
+import { CustomSelect, EmptyState, HelpTip, PageHeader } from "../components/ui";
 import { label, opportunitySummary } from "../utils/format";
 
 export function AssistantView({
@@ -23,29 +23,27 @@ export function AssistantView({
   const generateLabel = assistantLoading ? "Generating plan..." : generatedForSelected ? "Plan generated" : "Generate plan";
   return (
     <section className="assistant-page assistant-page-compact">
-      <div className="panel assistant-hero assistant-hero-compact">
-        <div>
-          <div className="title-with-help">
-            <h2>Apply Assistant</h2>
-            <HelpTip text="The assistant retrieves profile and opportunity evidence first, then turns it into application-specific planning notes." />
-          </div>
-          <p>Turn one saved opportunity into a clear application plan: what to do first, what may block you, and what evidence to reuse.</p>
-        </div>
-        <AssistantMiniFlow />
-      </div>
+      <PageHeader
+        title="Apply Assistant"
+        description="Generate a grounded preparation memo for one saved or planned opportunity."
+        hint="The assistant retrieves profile and opportunity evidence first, then turns it into application-specific planning notes."
+        actions={<AssistantMiniFlow />}
+      />
 
       <form className="panel assistant-picker assistant-picker-compact" onSubmit={onGenerate}>
-        <label className="field">
+        <div className="field">
           <span>Opportunity to prepare</span>
-          <select value={assistantForm.opportunity_id} onChange={(event) => onAssistantFormChange({ opportunity_id: event.target.value })}>
-            <option value="">Select a saved or planned opportunity</option>
-            {reminderEligibleOpportunities.map((opportunity) => (
-              <option value={opportunity.id} key={opportunity.id}>
-                {opportunity.title}
-              </option>
-            ))}
-          </select>
-        </label>
+          <CustomSelect
+            value={assistantForm.opportunity_id}
+            ariaLabel="Opportunity to prepare"
+            placeholder="Select a saved or planned opportunity"
+            options={[
+              { value: "", label: "Select a saved or planned opportunity" },
+              ...reminderEligibleOpportunities.map((opportunity) => ({ value: String(opportunity.id), label: opportunity.title })),
+            ]}
+            onChange={(opportunity_id) => onAssistantFormChange({ opportunity_id })}
+          />
+        </div>
         <button className="primary assistant-generate-button" disabled={assistantLoading || !assistantForm.opportunity_id || generatedForSelected}>
           {assistantLoading && <span className="spinner" aria-hidden="true" />}
           {generateLabel}
@@ -119,16 +117,16 @@ function AssistantWorkspace({ result, opportunity }: { result: ApplicationAssist
           <MemoText result={result} />
         </details>
         {result.web_research.length > 0 && (
-          <details className="panel assistant-collapse-card">
+          <details className="panel assistant-collapse-card" open>
             <summary>
-              <span>External source leads</span>
+          <span>Web research links</span>
               <small>
-                Search leads for verification
+                Links to explore this program
                 <HelpTip text="When enabled, the assistant searches DuckDuckGo using the opportunity title, source, official domain, keywords, disciplines, eligibility, and deadline terms. Results are cached during the server process and used as supporting context, not as verified eligibility rules." />
               </small>
             </summary>
             <p className="assistant-source-note">
-              Related public results for checking official pages, context, and program wording. Treat them as leads to verify, not as final rules.
+              Search results that can help you verify official pages, program context, and wording outside the imported record.
             </p>
             <WebResearchList items={result.web_research} />
           </details>
@@ -159,11 +157,7 @@ function OpportunityInsightGrid({ result, opportunity }: { result: ApplicationAs
     },
     {
       title: "Evidence to use",
-      body: compactText(firstUseful([
-        result.strengths.find((item) => item.toLowerCase().includes("publication")),
-        result.retrieved_context.find((item) => item.startsWith("Publication evidence")),
-        result.research_fit_statement,
-      ]), 120),
+      body: evidenceToUse(result),
       detail: "Profile proof to reuse in a CV, statement, or cover note.",
     },
     {
@@ -183,6 +177,16 @@ function OpportunityInsightGrid({ result, opportunity }: { result: ApplicationAs
       ))}
     </section>
   );
+}
+
+function evidenceToUse(result: ApplicationAssistantResult): string {
+  const evidence = firstUseful([
+        result.strengths.find((item) => item.toLowerCase().includes("publication")),
+        result.retrieved_context.find((item) => item.startsWith("Publication evidence")),
+        result.research_fit_statement,
+  ]).replace(/^[^:]+:\s*/, "").trim();
+  const sentence = evidence.split(/(?<=[.!?])\s+/)[0]?.trim();
+  return sentence || "Use your strongest profile evidence in the application narrative.";
 }
 
 function WebResearchList({ items }: { items: string[] }) {
@@ -222,7 +226,7 @@ function firstUseful(values: Array<string | undefined | null>): string {
 }
 
 function compactText(value: string, limit: number): string {
-  const text = value.replace(/^[^:]+:\s*/, "").trim();
+  const text = cleanMemoText(value).replace(/^[^:]+:\s*/, "").trim();
   return text.length <= limit ? text : `${text.slice(0, limit).trim()}...`;
 }
 
@@ -355,7 +359,7 @@ function MemoText({ result }: { result: ApplicationAssistantResult }) {
         ))}
       </aside>
       <div className="memo-brief-content">
-        {leadBlock && <MemoSection block={leadBlock} variant="lead" />}
+      {leadBlock && <MemoSection block={leadBlock} />}
         {secondaryBlocks.map((block) => (
           <MemoSection block={block} key={`${block.heading}-${block.lines.join("|")}`} />
         ))}
@@ -373,8 +377,9 @@ function MemoSection({ block, variant = "standard" }: { block: { heading: string
         <div className="memo-snippets">
           {block.lines.map((line) => (
             <div className="memo-copy-block" key={line}>
-              <blockquote>{stripListMarker(line)}</blockquote>
-              <button type="button" onClick={() => void navigator.clipboard?.writeText(stripListMarker(line))}>Copy</button>
+              <span>{parseSnippet(line).label}</span>
+              <blockquote>{parseSnippet(line).text}</blockquote>
+              <button className="secondary memo-copy-button" type="button" onClick={() => void navigator.clipboard?.writeText(parseSnippet(line).text)}>Copy</button>
             </div>
           ))}
         </div>
@@ -389,6 +394,13 @@ function MemoSection({ block, variant = "standard" }: { block: { heading: string
       )}
     </section>
   );
+}
+
+function parseSnippet(value: string): { label: string; text: string } {
+  const clean = stripListMarker(value);
+  const match = clean.match(/^([^:]{2,40}):\s*(.+)$/);
+  if (!match) return { label: "Snippet", text: clean };
+  return { label: match[1], text: match[2] };
 }
 
 function slugify(value: string): string {
@@ -444,15 +456,14 @@ function findMainStrategy(blocks: Array<{ heading: string; lines: string[] }>): 
 }
 
 function normalizeHeading(value: string): string {
-  return value
+  return cleanMemoText(value)
     .replace(/^#+\s*/, "")
-    .replace(/^\*\*(.+)\*\*$/, "$1")
     .replace(/:$/, "")
     .trim();
 }
 
 function stripEmptyMarkup(value: string): string {
-  return value.trim().replace(/^\*\*(.+)\*\*$/, "$1").trim();
+  return cleanMemoText(value);
 }
 
 function isMemoTitleLine(value: string): boolean {
@@ -460,11 +471,15 @@ function isMemoTitleLine(value: string): boolean {
 }
 
 function isListLine(value: string): boolean {
-  return /^[-*]\s+/.test(value) || /^\d+[.)]\s+/.test(value);
+  return /^[•\-*]\s+/.test(value) || /^\d+[.)]\s+/.test(value);
 }
 
 function stripListMarker(value: string): string {
-  return value.replace(/^[-*]\s+/, "").replace(/^\d+[.)]\s+/, "").trim();
+  return cleanMemoText(value).replace(/^[•\-*]\s+/, "").replace(/^\d+[.)]\s+/, "").trim();
+}
+
+function cleanMemoText(value: string): string {
+  return value.replace(/\*\*/g, "").trim();
 }
 
 function readinessLabel(score: number) {

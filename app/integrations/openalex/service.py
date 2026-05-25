@@ -45,7 +45,7 @@ def build_openalex_preview(
 ) -> OpenAlexImportPreview:
     concepts = [item for item in extracted.get("concepts", []) if isinstance(item, str)]
     works = [item for item in extracted.get("works", []) if isinstance(item, str)]
-    normalized = normalize_profile_concepts(concepts)
+    normalized = normalize_profile_concepts(concepts, extracted.get("concept_records", []))
     existing_publications = set(unpack_list(details.publications)) if details is not None else set()
     new_publications = [work for work in works if work not in existing_publications]
     return OpenAlexImportPreview(

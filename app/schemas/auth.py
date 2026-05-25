@@ -28,6 +28,21 @@ class UserVerifyEmail(BaseModel):
     token: str = Field(..., min_length=20)
 
 
+class UserAccountUpdate(BaseModel):
+    email: EmailStr
+    full_name: str = Field(..., min_length=3, max_length=120)
+
+    @field_validator("full_name")
+    @classmethod
+    def validate_full_name(cls, value: str) -> str:
+        return UserRegister.validate_full_name(value)
+
+
+class UserPasswordChange(BaseModel):
+    current_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8)
+
+
 class AuthProviderConfigRead(BaseModel):
     orcid_oauth_enabled: bool
 

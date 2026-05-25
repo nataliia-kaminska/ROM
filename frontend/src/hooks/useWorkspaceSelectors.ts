@@ -9,6 +9,7 @@ export function useWorkspaceSelectors({
   profiles,
   recommendations,
   opportunities,
+  trackedOpportunities,
   selectedOpportunity,
   statuses,
   reminders,
@@ -20,6 +21,7 @@ export function useWorkspaceSelectors({
   profiles: Profile[];
   recommendations: Recommendation[];
   opportunities: Opportunity[];
+  trackedOpportunities: Opportunity[];
   selectedOpportunity: Opportunity | null;
   statuses: StatusRecord[];
   reminders: Reminder[];
@@ -39,17 +41,18 @@ export function useWorkspaceSelectors({
     () => reminders.filter((reminder) => reminder.opportunity_id === selectedOpportunity?.id),
     [reminders, selectedOpportunity],
   );
+  const currentStatuses = useMemo(() => latestStatusesByOpportunity(statuses), [statuses]);
   const statusByOpportunity = useMemo(
-    () => new Map(statuses.map((status) => [status.opportunity_id, status])),
-    [statuses],
+    () => new Map(currentStatuses.map((status) => [status.opportunity_id, status])),
+    [currentStatuses],
   );
   const opportunitiesById = useMemo(
-    () => new Map([...opportunities, ...recommendations.map((item) => item.opportunity)].map((item) => [item.id, item])),
-    [opportunities, recommendations],
+    () => new Map([...opportunities, ...trackedOpportunities, ...recommendations.map((item) => item.opportunity)].map((item) => [item.id, item])),
+    [opportunities, recommendations, trackedOpportunities],
   );
   const selectedStatusIds = useMemo(
-    () => new Set(statuses.filter((record) => reminderStatuses.includes(record.status)).map((record) => record.opportunity_id)),
-    [statuses],
+    () => new Set(currentStatuses.filter((record) => reminderStatuses.includes(record.status)).map((record) => record.opportunity_id)),
+    [currentStatuses],
   );
   const reminderEligibleOpportunities = useMemo(
     () => [...opportunitiesById.values()].filter((opportunity) => selectedStatusIds.has(opportunity.id)),
@@ -80,8 +83,8 @@ export function useWorkspaceSelectors({
   );
   const topMatches = useMemo(() => recommendations.slice(0, 3), [recommendations]);
   const plannedStatuses = useMemo(
-    () => statuses.filter((status) => ["planned", "applied"].includes(status.status)),
-    [statuses],
+    () => currentStatuses.filter((status) => ["planned", "applied"].includes(status.status)),
+    [currentStatuses],
   );
   const nextReminder = useMemo(
     () => reminders.filter((reminder) => reminder.status === "pending").sort((a, b) => a.remind_on.localeCompare(b.remind_on))[0] ?? null,
@@ -142,4 +145,15 @@ export function useWorkspaceSelectors({
     nextReminder,
     nextAction,
   };
+}
+
+function latestStatusesByOpportunity(statuses: StatusRecord[]): StatusRecord[] {
+  const byOpportunity = new Map<number, StatusRecord>();
+  for (const status of statuses) {
+    const current = byOpportunity.get(status.opportunity_id);
+    if (!current || status.id > current.id) {
+      byOpportunity.set(status.opportunity_id, status);
+    }
+  }
+  return [...byOpportunity.values()];
 }

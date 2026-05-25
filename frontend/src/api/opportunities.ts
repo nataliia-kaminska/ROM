@@ -45,6 +45,11 @@ export const opportunitiesApi = {
       method: "PUT",
       body: { status, notes },
     }),
+  clearStatus: (token: string, profileId: number, opportunityId: number) =>
+    request<void>(`/profiles/${profileId}/opportunities/${opportunityId}/status`, {
+      token,
+      method: "DELETE",
+    }),
   statuses: (token: string, profileId: number) =>
     request<StatusRecord[]>(`/profiles/${profileId}/opportunities/statuses`, { token }),
   bulkImport: (token: string, body: { source: string; dry_run: boolean; opportunities: OpportunityPayload[] }) =>

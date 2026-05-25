@@ -8,6 +8,7 @@ def extract_profile_payload(orcid_id: str, record: dict[str, Any]) -> dict[str, 
     keywords = person.get("keywords") or {}
     addresses = person.get("addresses") or {}
     researcher_urls = person.get("researcher-urls") or {}
+    emails = person.get("emails") or {}
 
     given = _nested_value(name, "given-names", "value")
     family = _nested_value(name, "family-name", "value")
@@ -29,6 +30,7 @@ def extract_profile_payload(orcid_id: str, record: dict[str, Any]) -> dict[str, 
 
     return {
         "full_name": full_name,
+        "email": _extract_email(emails),
         "country": country,
         "keywords": extracted_keywords,
         "summary": _nested_value(biography, "content"),
@@ -61,4 +63,12 @@ def _find_url(urls: list[str], needle: str) -> str | None:
     for url in urls:
         if needle in url.lower():
             return url
+    return None
+
+
+def _extract_email(source: dict[str, Any]) -> str | None:
+    for item in source.get("email", []):
+        value = _nested_value(item, "email")
+        if value:
+            return value.lower()
     return None

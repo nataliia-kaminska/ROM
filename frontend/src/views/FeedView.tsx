@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { Opportunity, OpportunityStatus, Recommendation } from "../types";
 import { careerStages, opportunityTypes, type View } from "../constants";
 import { OpportunityCard } from "../components/opportunities";
-import { EmptyState, HelpTip, MultiValueField, SkeletonCards } from "../components/ui";
+import { CustomSelect, EmptyState, MultiValueField, PageHeader, SkeletonCards } from "../components/ui";
 import { label, splitList } from "../utils/format";
 
 type FeedFilters = {
@@ -80,19 +80,18 @@ export function FeedView({
   );
 
   return (
-    <section className="panel">
-      <div className="section-title">
-        <div>
-          <div className="title-with-help">
-            <h2>Matches</h2>
-            <HelpTip text="Keyword search uses Elasticsearch when it is enabled. Elasticsearch ranks full-text matches across title, summary, eligibility, keywords, and disciplines; profile recommendations still use embedding similarity plus eligibility, deadline, and history scoring." />
-          </div>
-          <p className="muted">Browse research opportunities, compare fit, and move promising items into your application workflow.</p>
-        </div>
+    <section className="feed-page">
+      <PageHeader
+        title="Matches"
+        description="Browse research opportunities, compare fit, and move promising items into your application workflow."
+        hint="Keyword search uses Elasticsearch when it is enabled. Elasticsearch ranks full-text matches across title, summary, eligibility, keywords, and disciplines; profile recommendations still use embedding similarity plus eligibility, deadline, and history scoring."
+        actions={
         <button className="secondary" type="button" onClick={() => onViewChange("about")}>
           How it works
         </button>
-      </div>
+        }
+      />
+      <div className="panel">
       <div className="match-toolbar-row">
         <MultiValueField
           className="filter-field match-keywords"
@@ -107,15 +106,22 @@ export function FeedView({
           <label className="field sort-combo">
             <span>Sort</span>
             <div>
-              <select value={selectedSortBy} onChange={(event) => onFiltersChange({ ...filters, sort_by: event.target.value })}>
-                {activeProfile && <option value="match_score">Match score</option>}
-                {activeProfile && <option value="semantic_score">Semantic fit</option>}
-                {activeProfile && <option value="readiness_score">Readiness</option>}
-                <option value="deadline">Deadline</option>
-                <option value="created_at">Newest added</option>
-                <option value="source">Source</option>
-                <option value="title">Title</option>
-              </select>
+              <CustomSelect
+                value={selectedSortBy}
+                ariaLabel="Sort matches"
+                options={[
+                  ...(activeProfile ? [
+                    { value: "match_score", label: "Match score" },
+                    { value: "semantic_score", label: "Semantic fit" },
+                    { value: "readiness_score", label: "Readiness" },
+                  ] : []),
+                  { value: "deadline", label: "Deadline" },
+                  { value: "created_at", label: "Newest added" },
+                  { value: "source", label: "Source" },
+                  { value: "title", label: "Title" },
+                ]}
+                onChange={(sort_by) => onFiltersChange({ ...filters, sort_by })}
+              />
               <button
                 className="secondary sort-direction"
                 type="button"
@@ -127,7 +133,7 @@ export function FeedView({
               </button>
             </div>
           </label>
-          <button className="secondary filters-toggle" type="button" onClick={() => setFiltersOpen((current) => !current)}>
+          <button className={`secondary filters-toggle ${activeFilterCount > 0 ? "active" : ""}`} type="button" onClick={() => setFiltersOpen((current) => !current)}>
             Filters active: {activeFilterCount}
           </button>
         </div>
@@ -166,22 +172,17 @@ export function FeedView({
             placeholder="euraxess, daad..."
             onChange={(source) => onFiltersChange({ ...filters, source: source.join(", ") })}
           />
-          {activeProfile && (
-            <label className="field filter-field">
-              <span>Status</span>
-              <select value={filters.status_filter} onChange={(event) => onFiltersChange(statusFilterChange(filters, event.target.value))}>
-                <option value="visible">Active workflow</option>
-                <option value="all">All, including ignored</option>
-                <option value="saved">Saved</option>
-                <option value="planned">Planned</option>
-                <option value="applied">Applied</option>
-                <option value="accepted">Accepted</option>
-                <option value="rejected">Rejected</option>
-                <option value="ignored">Ignored</option>
-              </select>
-            </label>
-          )}
-          <div className="filter-actions">
+          <div className="filter-actions-row">
+            {activeProfile && (
+              <MultiValueField
+                className="filter-field status-filter-field"
+                labelText="Status"
+                values={statusLabelsFromFilter(filters.status_filter)}
+                suggestions={["All", "Not in my board", "Saved", "Planned", "Applied", "Accepted", "Rejected", "Ignored"]}
+                placeholder="Choose statuses..."
+                onChange={(statusLabels) => onFiltersChange(statusFilterChange(filters, statusLabels))}
+              />
+            )}
             <label className="toggle filter-toggle">
               <input
                 type="checkbox"
@@ -225,6 +226,7 @@ export function FeedView({
         )}
       </div>
       <PaginationBar page={page} totalPages={totalPages} totalIsEstimate={totalIsEstimate} hasNextPage={hasNextPage} loading={workspaceLoading} onPageChange={onPageChange} position="bottom" />
+      </div>
     </section>
   );
 }
@@ -278,7 +280,7 @@ function countActiveFilters(filters: FeedFilters): number {
     filters.country,
     filters.career_stage,
     filters.source,
-    filters.status_filter !== "visible" ? filters.status_filter : "",
+    filters.status_filter === "visible" ? "" : filters.status_filter,
     filters.active_only ? "" : "inactive",
   ].filter((value) => splitList(value).length > 0).length;
 }
@@ -317,17 +319,39 @@ function normalizeTerms(value: string): string[] {
   return splitList(value).map((item) => item.toLowerCase());
 }
 
-function statusFilterChange(filters: FeedFilters, status_filter: string): FeedFilters {
+function statusFilterChange(filters: FeedFilters, statusLabels: string[]): FeedFilters {
+  const statuses = normalizeStatusLabels(statusLabels);
   return {
     ...filters,
-    status_filter,
-    include_ignored: status_filter === "ignored" || status_filter === "all",
+    status_filter: statuses.join(", "),
+    include_ignored: statuses.includes("ignored") || statuses.includes("all"),
   };
 }
 
 function statusMatches(status: OpportunityStatus | null, statusFilter: string): boolean {
-  if (statusFilter === "all") return true;
-  if (statusFilter === "visible") return status !== "ignored";
-  if (statusFilter === "ignored") return status === "ignored";
-  return status === statusFilter;
+  const statuses = normalizeStatusLabels(splitList(statusFilter));
+  if (statuses.length === 0 || statuses.includes("visible")) return status !== "ignored";
+  if (statuses.includes("all")) return true;
+  if (statuses.includes("browsing") && status === null) return true;
+  return Boolean(status && statuses.includes(status));
+}
+
+function statusLabelsFromFilter(statusFilter: string): string[] {
+  return splitList(statusFilter).filter((status) => status !== "visible").map((status) => (status === "browsing" ? "Not in my board" : label(status)));
+}
+
+function normalizeStatusLabels(values: string[]): string[] {
+  const map: Record<string, string> = {
+    all: "all",
+    visible: "visible",
+    "not in my board": "browsing",
+    browsing: "browsing",
+    saved: "saved",
+    planned: "planned",
+    applied: "applied",
+    accepted: "accepted",
+    rejected: "rejected",
+    ignored: "ignored",
+  };
+  return [...new Set(values.map((value) => map[value.toLowerCase().trim()] ?? value.toLowerCase().trim()).filter(Boolean))];
 }

@@ -1,18 +1,35 @@
 import type { OpportunityPayload, ProfileDetailsPayload, ProfilePayload } from "./api";
-import type { CareerStage, OpportunityStatus, OpportunityType } from "./types";
+import type { CareerStage, DisplayOpportunityStatus, OpportunityStatus, OpportunityType } from "./types";
 
 export const careerStages: CareerStage[] = ["bachelor", "master", "phd", "postdoc", "early_career", "senior"];
 export const opportunityTypes: OpportunityType[] = ["grant", "exchange", "fellowship", "internship", "research_position", "training"];
 export const trackedStatuses: OpportunityStatus[] = ["saved", "planned", "applied", "accepted", "rejected", "ignored"];
+export const displayStatuses: DisplayOpportunityStatus[] = ["browsing", ...trackedStatuses];
 export const reminderStatuses: OpportunityStatus[] = ["saved", "planned"];
-export const researcherViews = ["about", "dashboard", "feed", "profile", "board", "assistant", "reminders", "notifications"] as const;
+export const researcherViews = ["about", "dashboard", "profile", "feed", "board", "assistant", "reminders"] as const;
 
-export type View = "dashboard" | "feed" | "profile" | "board" | "reminders" | "notifications" | "assistant" | "about" | "verify_email" | "orcid_callback" | "admin" | "opportunity";
+export type View =
+  | "auth"
+  | "dashboard"
+  | "feed"
+  | "profile"
+  | "account"
+  | "board"
+  | "reminders"
+  | "notifications"
+  | "assistant"
+  | "about"
+  | "verify_email"
+  | "orcid_callback"
+  | "admin"
+  | "opportunity";
 
 export const viewRoutes: Record<View, string> = {
+  auth: "/sign-in",
   dashboard: "/dashboard",
   feed: "/matches",
   profile: "/profile",
+  account: "/account",
   board: "/board",
   assistant: "/assistant",
   about: "/about",
@@ -45,7 +62,7 @@ export const defaultFilters = {
   active_only: true,
   min_score: 0,
   include_ignored: false,
-  status_filter: "visible",
+  status_filter: "",
   sort_by: "match_score",
   sort_order: "desc",
 };

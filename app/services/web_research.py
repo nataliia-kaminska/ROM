@@ -11,6 +11,10 @@ from app.services.serialization import unpack_list
 logger = logging.getLogger(__name__)
 
 
+def duckduckgo_search_results(query: str, max_results: int) -> list[dict[str, str]]:
+    return _duckduckgo_search_results(query, max_results)
+
+
 def research_opportunity_web(opportunity: Opportunity) -> list[str]:
     if not settings.assistant_web_research_enabled:
         return []
@@ -71,6 +75,14 @@ def _cached_research(
 
 @lru_cache(maxsize=128)
 def _duckduckgo_search(query: str, max_results: int) -> list[str]:
+    results = _duckduckgo_search_results(query, max_results)
+    snippets = [f"Web research: {item['title']}. {item['body']} Source: {item['href']}".strip() for item in results]
+    logger.info("assistant web research query complete provider=duckduckgo query=%s results=%s", query, len(snippets))
+    return snippets
+
+
+@lru_cache(maxsize=128)
+def _duckduckgo_search_results(query: str, max_results: int) -> list[dict[str, str]]:
     try:
         try:
             from ddgs import DDGS
@@ -89,15 +101,14 @@ def _duckduckgo_search(query: str, max_results: int) -> list[str]:
         logger.warning("assistant web research failed provider=duckduckgo query=%s error=%s", query, exc)
         return []
 
-    snippets = []
+    snippets: list[dict[str, str]] = []
     for result in results[:max_results]:
         title = _clean(result.get("title", ""))
         href = _clean(result.get("href", ""))
         body = _clean(result.get("body", ""))
         if not title and not body:
             continue
-        snippets.append(f"Web research: {title}. {body} Source: {href}".strip())
-    logger.info("assistant web research query complete provider=duckduckgo query=%s results=%s", query, len(snippets))
+        snippets.append({"title": title, "href": href, "body": body})
     return snippets
 
 

@@ -1,9 +1,9 @@
-import type { ApplicationAssistantResult, Opportunity, OpportunityStatus, Recommendation, Reminder, StatusRecord } from "../types";
+import type { ApplicationAssistantResult, DisplayOpportunityStatus, Opportunity, OpportunityStatus, Recommendation, Reminder, StatusRecord } from "../types";
 import type { View } from "../constants";
-import { trackedStatuses } from "../constants";
-import { EmptyState } from "../components/ui";
+import { displayStatuses } from "../constants";
+import { EmptyState, PageHeader } from "../components/ui";
 import { RequirementSummary, ScoreBreakdown } from "../components/opportunities";
-import { label, opportunityEligibility, opportunitySummary, statusHelp } from "../utils/format";
+import { addedLabel, deadlineLabel, formatDate, label, opportunityEligibility, opportunitySummary, statusHelp } from "../utils/format";
 
 export function OpportunityDetailsView({
   opportunity,
@@ -22,7 +22,7 @@ export function OpportunityDetailsView({
   assistantResult: ApplicationAssistantResult | null;
   status: StatusRecord | null;
   canTrack: boolean;
-  onStatus: (opportunityId: number, status: OpportunityStatus) => void;
+  onStatus: (opportunityId: number, status: DisplayOpportunityStatus) => void;
   onViewChange: (view: View) => void;
   onAssistantSelect: (opportunityId: number) => void;
 }) {
@@ -42,14 +42,20 @@ export function OpportunityDetailsView({
 
   return (
     <section className="opportunity-detail-page">
+      <PageHeader
+        title="Opportunity details"
+        description="Review the source content, fit evidence, status, and preparation signals for this opportunity."
+        hint="Detailed text comes from imported source fields and AI-assisted parsing. Always verify final eligibility on the official source page."
+      />
       <div className="detail-hero panel">
         <div>
           <p className="eyebrow">{opportunity.source}</p>
           <h2>{opportunity.title}</h2>
           <div className="meta">
             <span>{label(opportunity.opportunity_type)}</span>
-            <span>{opportunity.deadline ?? "No deadline"}</span>
-            {currentStatus && <span>{label(currentStatus)}</span>}
+            <span>{deadlineLabel(opportunity.deadline)}</span>
+            <span>{addedLabel(opportunity.created_at)}</span>
+            {currentStatus && <span className={`status-chip status-${currentStatus}`}>{label(currentStatus)}</span>}
           </div>
         </div>
         <div className="detail-hero-actions">
@@ -67,12 +73,45 @@ export function OpportunityDetailsView({
           <h3>Eligibility</h3>
           <p>{opportunityEligibility(opportunity)}</p>
           <RequirementSummary opportunity={opportunity} />
-          <DetailList title="Evidence from source" items={opportunity.extracted_requirements?.snippets ?? []} muted />
           <div className="chips">
             {[...opportunity.disciplines, ...opportunity.keywords, ...opportunity.countries, ...opportunity.career_stages].map((chip) => (
               <span key={chip}>{chip}</span>
             ))}
           </div>
+          <section className="detail-main-panels">
+            <article>
+              <h3>Why it matters</h3>
+              {whyItMatters(opportunity, recommendation).length ? (
+                <ul className="reasons">
+                  {whyItMatters(opportunity, recommendation).map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="muted">Match reasons appear after personalized recommendations are available.</p>
+              )}
+            </article>
+            <article>
+              <h3>Reminders</h3>
+              {reminders.length ? (
+                <div className="detail-reminder-list">
+                  {reminders.map((reminder) => (
+                    <div className={`reminder-node detail-reminder-node ${reminder.status === "completed" ? "completed" : ""}`} key={reminder.id}>
+                      <ReminderStatusIcon status={reminder.status} />
+                      <div>
+                        <div className="reminder-meta">
+                          <span>{formatDate(reminder.remind_on)}</span>
+                        </div>
+                        <strong>{reminder.message || "Deadline reminder"}</strong>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted">No reminders yet.</p>
+              )}
+            </article>
+          </section>
         </article>
 
         <aside className="detail-side">
@@ -86,19 +125,6 @@ export function OpportunityDetailsView({
               </>
             ) : (
               <EmptyState title="No personalized score" detail="Create or select a profile to see semantic fit, eligibility, deadline, and history scoring." />
-            )}
-          </article>
-
-          <article className="panel">
-            <h3>Why it matters</h3>
-            {whyItMatters(opportunity, recommendation).length ? (
-              <ul className="reasons">
-                {whyItMatters(opportunity, recommendation).map((reason) => (
-                  <li key={reason}>{reason}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="muted">Match reasons appear after personalized recommendations are available.</p>
             )}
           </article>
 
@@ -129,26 +155,9 @@ export function OpportunityDetailsView({
           <article className="panel">
             <h3>Status</h3>
             {canTrack ? (
-              <StatusSlider value={currentStatus} onChange={(nextStatus) => onStatus(opportunity.id, nextStatus)} />
+              <StatusStagePicker value={currentStatus} onChange={(nextStatus) => onStatus(opportunity.id, nextStatus)} />
             ) : (
               <p className="muted">Create an account to save, ignore, and plan applications.</p>
-            )}
-          </article>
-
-          <article className="panel">
-            <h3>Reminders</h3>
-            {reminders.length ? (
-              <div className="table compact-detail-table">
-                {reminders.map((reminder) => (
-                  <div className="table-row compact-row" key={reminder.id}>
-                    <span>{reminder.message || "Deadline reminder"}</span>
-                    <span>{reminder.remind_on}</span>
-                    <span>{label(reminder.status)}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="muted">No reminders yet.</p>
             )}
           </article>
         </aside>
@@ -162,40 +171,37 @@ function whyItMatters(opportunity: Opportunity, recommendation: Recommendation |
   if (extracted.length) return extracted;
   if (recommendation?.reasons.length) return recommendation.reasons;
   const fallback = [
-    opportunity.deadline ? `Deadline: ${opportunity.deadline}.` : "",
+    opportunity.deadline ? `${deadlineLabel(opportunity.deadline)}.` : "",
     opportunity.countries.length ? `Relevant region: ${opportunity.countries.slice(0, 3).join(", ")}.` : "",
     opportunity.keywords.length ? `Themes: ${opportunity.keywords.slice(0, 4).join(", ")}.` : "",
   ].filter(Boolean);
   return fallback;
 }
 
-function StatusSlider({ value, onChange }: { value: OpportunityStatus | null; onChange: (status: OpportunityStatus) => void }) {
-  const currentIndex = Math.max(0, trackedStatuses.indexOf(value ?? "saved"));
-  const selectedStatus = trackedStatuses[currentIndex];
+function StatusStagePicker({ value, onChange }: { value: OpportunityStatus | null; onChange: (status: DisplayOpportunityStatus) => void }) {
+  const selectedStatus: DisplayOpportunityStatus = value ?? "browsing";
+  const statusOptions = displayStatuses;
   return (
-    <div className="status-slider">
-      <div>
+    <div className="status-stage-picker">
+      <header>
         <strong>{label(selectedStatus)}</strong>
         <span>{statusHelp(selectedStatus)}</span>
-      </div>
-      <input
-        type="range"
-        min={0}
-        max={trackedStatuses.length - 1}
-        step={1}
-        value={currentIndex}
-        aria-label="Opportunity status"
-        onChange={(event) => onChange(trackedStatuses[Number(event.target.value)])}
-      />
-      <div className="status-slider-labels">
-        {trackedStatuses.map((status) => (
-          <span
-            className={status === selectedStatus ? "active" : ""}
+      </header>
+      <div>
+        {statusOptions.map((status, index) => (
+          <button
+            className={`${status === selectedStatus ? "active" : ""} status-${status}`}
             key={status}
+            type="button"
             title={statusHelp(status)}
+            onClick={() => onChange(status)}
           >
-            {label(status)}
-          </span>
+            <span>{index + 1}</span>
+            <div>
+              <strong>{label(status)}</strong>
+              <small>{statusHelp(status)}</small>
+            </div>
+          </button>
         ))}
       </div>
     </div>
@@ -275,6 +281,14 @@ function FitCompass({ recommendation }: { recommendation: Recommendation }) {
           </span>
         ))}
       </div>
+    </div>
+  );
+}
+
+function ReminderStatusIcon({ status }: { status: Reminder["status"] }) {
+  return (
+    <div className={`reminder-icon reminder-icon-${status}`} title={label(status)} aria-label={label(status)}>
+      {status === "completed" ? "✓" : "!"}
     </div>
   );
 }

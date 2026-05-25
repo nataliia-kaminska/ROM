@@ -97,6 +97,7 @@ export function AppShell({
   notice,
   error,
   onViewChange,
+  onAccountSettings,
   onLogout,
   children,
 }: {
@@ -109,18 +110,19 @@ export function AppShell({
   notice: string;
   error: string;
   onViewChange: (view: View) => void;
+  onAccountSettings: () => void;
   onLogout: () => void;
   children: ReactNode;
 }) {
-  const title = view === "about" ? "Research Opportunity Matcher" : view === "opportunity" ? "Opportunity details" : activeProfile ? profileLabel(activeProfile, user?.email) : isGuest ? "Browse opportunities" : "Create your first profile";
-  const accountIdentity = user?.auth_provider === "orcid" && user.orcid_id ? `ORCID ${user.orcid_id}` : user?.email;
+  const accountName = activeProfile ? profileLabel(activeProfile, user?.email) : user?.full_name || "Guest";
+  const accountIdentity = isGuest ? "Browsing public catalog" : user?.email;
   return (
     <main className="app-shell">
       <aside className="sidebar">
         <div className="brand">
           <span className="mark">ROM</span>
           <div>
-            <strong>Research Matcher</strong>
+            <strong>Research Opportunity Matcher</strong>
           </div>
         </div>
         <nav>
@@ -139,11 +141,11 @@ export function AppShell({
           ))}
         </nav>
         <div className="sidebar-footer">
-          <div className="account-summary">
-            <small>{isGuest ? "Guest access" : "Signed in"}</small>
-            <span>{isGuest ? "Browsing public catalog" : accountIdentity}</span>
-            {activeProfile && <small>Profile: {profileLabel(activeProfile, user?.email)}</small>}
-          </div>
+          {!isGuest && <ProfileCompleteness profile={activeProfile} details={detailsForm} />}
+          <button className="account-summary" type="button" onClick={isGuest ? undefined : onAccountSettings}>
+            <span>{accountName}</span>
+            <small>{accountIdentity}</small>
+          </button>
           <button className="ghost" onClick={onLogout}>
             {isGuest ? "Back to sign in" : "Sign out"}
           </button>
@@ -151,13 +153,6 @@ export function AppShell({
       </aside>
 
       <section className="workspace">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">{viewLabel(view)}</p>
-            <h1>{title}</h1>
-          </div>
-        </header>
-        {!isGuest && <ProfileCompleteness profile={activeProfile} details={detailsForm} />}
         {isGuest && (
           <div className="alert guest-callout">
             Create an account to get personalized recommendations, save opportunities, plan applications, and receive reminders.

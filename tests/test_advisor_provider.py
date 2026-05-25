@@ -38,8 +38,9 @@ def test_deterministic_advisor_memo_prefers_web_research_for_official_checks():
 
     memo = deterministic_advisor_memo(facts)
 
-    assert "Official AI Fellowship call" in memo
     assert "Draft snippets" in memo
+    assert "Web research" not in memo
+    assert "https://example.org/call" not in memo
 
 
 def test_groq_provider_falls_back_without_api_key(monkeypatch):

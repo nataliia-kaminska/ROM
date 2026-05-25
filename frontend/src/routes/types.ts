@@ -8,9 +8,11 @@ import type {
   NotificationPreference,
   OpenAlexPreview,
   Opportunity,
+  DisplayOpportunityStatus,
   OpportunityStatus,
   OpportunityType,
   Profile,
+  ProfileDiscoveryCandidate,
   QueueStats,
   Recommendation,
   Reminder,
@@ -88,7 +90,7 @@ export type WorkspaceController = {
   keywordOptions: string[];
   onProfileFocus: (fields: string[]) => void;
   onSelectOpportunity: (opportunity: Opportunity) => void;
-  onStatus: (opportunityId: number, status: OpportunityStatus) => void;
+  onStatus: (opportunityId: number, status: DisplayOpportunityStatus) => void;
   onFiltersChange: (filters: Filters) => void;
   onResetFilters: () => void;
   onMatchesPageChange: (page: number) => void;
@@ -100,23 +102,38 @@ export type WorkspaceController = {
 export type ProfileController = {
   userEmail: string;
   userFullName: string;
+  userAuthProvider: string;
+  userOrcidId: string | null;
+  passwordLoginEnabled: boolean;
   loading: boolean;
   profileForm: ProfilePayload;
   detailsForm: ProfileDetailsPayload;
+  accountForm: { full_name: string; email: string };
+  passwordForm: { current_password: string; new_password: string; confirm_password: string };
   orcidForm: OrcidForm;
   openAlexForm: OpenAlexForm;
   openAlexPreview: OpenAlexPreview | null;
+  profileDiscoveryCandidates: ProfileDiscoveryCandidate[];
+  profileDiscoveryConfirmed: ProfileDiscoveryCandidate[];
+  profileDiscoveryLoading: boolean;
   onProfileChange: (profile: ProfilePayload) => void;
   onDetailsChange: (details: ProfileDetailsPayload) => void;
+  onAccountChange: (account: { full_name: string; email: string }) => void;
+  onPasswordChange: (password: { current_password: string; new_password: string; confirm_password: string }) => void;
   onLoadDetails: () => void;
   highlightFields: string[];
   onSaveProfile: (event: FormEvent) => void;
   onSaveDetails: (event: FormEvent) => void;
+  onSaveAccount: (event: FormEvent) => void;
+  onSavePassword: (event: FormEvent) => void;
   onOrcidChange: (form: OrcidForm) => void;
   onOpenAlexChange: (form: OpenAlexForm) => void;
   onImportOrcid: (event: FormEvent) => void;
   onImportOpenAlex: () => void;
   onPreviewOpenAlex: (event: FormEvent) => void;
+  onDiscoverProfileCandidates: () => void;
+  onApplyProfileCandidate: (candidate: ProfileDiscoveryCandidate) => void;
+  onDismissProfileCandidate: (candidate: ProfileDiscoveryCandidate) => void;
 };
 
 export type NotificationsController = {

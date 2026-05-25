@@ -1,14 +1,17 @@
 import { type FormEvent, useEffect, useState } from "react";
 import type { ProfileDetailsPayload, ProfilePayload } from "../api";
-import type { CareerStage, OpenAlexPreview, OpportunityType } from "../types";
+import type { CareerStage, OpenAlexPreview, OpportunityType, ProfileDiscoveryCandidate } from "../types";
 import { careerStages, opportunityTypes } from "../constants";
-import { ActionButton, Field, HelpTip, MultiValueField, SelectField, TextArea } from "../components/ui";
+import { ActionButton, Field, HelpTip, MultiValueField, PageHeader, SelectField, TextArea } from "../components/ui";
+import { label } from "../utils/format";
 
-type ProfileSection = "basics" | "research" | "imports";
+type ProfileSection = "preview" | "basics" | "research" | "imports";
 
 export function ProfileView({
   userEmail,
   userFullName,
+  userAuthProvider,
+  userOrcidId,
   activeProfileExists,
   loading,
   profileForm,
@@ -19,10 +22,12 @@ export function ProfileView({
   orcidForm,
   openAlexForm,
   openAlexPreview,
+  profileDiscoveryCandidates,
+  profileDiscoveryConfirmed,
+  profileDiscoveryLoading,
   highlightFields,
   onProfileChange,
   onDetailsChange,
-  onLoadDetails,
   onSaveProfile,
   onSaveDetails,
   onOrcidChange,
@@ -30,9 +35,15 @@ export function ProfileView({
   onImportOrcid,
   onImportOpenAlex,
   onPreviewOpenAlex,
+  onDiscoverProfileCandidates,
+  onApplyProfileCandidate,
+  onDismissProfileCandidate,
+  onOpenAccountSettings,
 }: {
   userEmail: string;
   userFullName: string;
+  userAuthProvider: string;
+  userOrcidId: string | null;
   activeProfileExists: boolean;
   loading: boolean;
   profileForm: ProfilePayload;
@@ -43,10 +54,12 @@ export function ProfileView({
   orcidForm: { orcid_id: string; email: string; career_stage: CareerStage; disciplines: string; preferred_countries: string };
   openAlexForm: { openalex_author_id: string; orcid_id: string; max_works: number };
   openAlexPreview: OpenAlexPreview | null;
+  profileDiscoveryCandidates: ProfileDiscoveryCandidate[];
+  profileDiscoveryConfirmed: ProfileDiscoveryCandidate[];
+  profileDiscoveryLoading: boolean;
   highlightFields: string[];
   onProfileChange: (form: ProfilePayload) => void;
   onDetailsChange: (form: ProfileDetailsPayload) => void;
-  onLoadDetails: () => void;
   onSaveProfile: (event: FormEvent) => void;
   onSaveDetails: (event: FormEvent) => void;
   onOrcidChange: (form: { orcid_id: string; email: string; career_stage: CareerStage; disciplines: string; preferred_countries: string }) => void;
@@ -54,41 +67,83 @@ export function ProfileView({
   onImportOrcid: (event: FormEvent) => void;
   onImportOpenAlex: () => void;
   onPreviewOpenAlex: (event: FormEvent) => void;
+  onDiscoverProfileCandidates: () => void;
+  onApplyProfileCandidate: (candidate: ProfileDiscoveryCandidate) => void;
+  onDismissProfileCandidate: (candidate: ProfileDiscoveryCandidate) => void;
+  onOpenAccountSettings: () => void;
 }) {
-  const [section, setSection] = useState<ProfileSection>("basics");
+  const [section, setSection] = useState<ProfileSection>(() => sectionFromHash());
   const accountName = userFullName || profileForm.full_name;
   const highlights = new Set(highlightFields);
+  const isOrcidAccount = userAuthProvider === "orcid";
+
+  function selectSection(nextSection: ProfileSection) {
+    setSection(nextSection);
+    if (window.location.hash) {
+      window.history.replaceState(null, "", "/profile");
+    }
+  }
+
+  useEffect(() => {
+    const syncHash = () => setSection(sectionFromHash());
+    window.addEventListener("hashchange", syncHash);
+    return () => window.removeEventListener("hashchange", syncHash);
+  }, []);
 
   useEffect(() => {
     if (highlightFields.some((field) => ["research_summary", "publications"].includes(field))) {
-      setSection("research");
+      selectSection("research");
       return;
     }
     if (highlightFields.length > 0) {
-      setSection("basics");
+      selectSection("basics");
     }
   }, [highlightFields.join("|")]);
 
   return (
-    <section className="panel">
-      <div className="section-title">
-        <div>
-          <h2>Profile Wizard and Editor</h2>
-          <p>Complete the required identity fields first, then add research evidence or import public metadata.</p>
-        </div>
-      </div>
+    <section className="profile-page">
+      <PageHeader
+        title={section === "preview" ? "Research profile" : "Profile editor"}
+        description={section === "preview" ? "Review how your profile looks to the matching engine before editing details." : "Update profile basics, research evidence, and imported academic metadata."}
+        hint="Country, career stage, disciplines, keywords, publications, and research summary have the strongest effect on personalized matches."
+      />
 
-      <nav className="profile-subnav" aria-label="Profile sections">
-        <button type="button" className={section === "basics" ? "active" : ""} onClick={() => setSection("basics")}>
+      <div className="panel">
+      {section !== "preview" && (
+        <nav className="profile-subnav" aria-label="Profile sections">
+        <button type="button" onClick={() => selectSection("preview")}>
+          Preview
+        </button>
+        <button type="button" className={section === "basics" ? "active" : ""} onClick={() => selectSection("basics")}>
           Wizard and Editor
         </button>
-        <button type="button" className={section === "research" ? "active" : ""} onClick={() => setSection("research")}>
+        <button type="button" className={section === "research" ? "active" : ""} onClick={() => selectSection("research")}>
           Research Evidence
         </button>
-        <button type="button" className={section === "imports" ? "active" : ""} onClick={() => setSection("imports")}>
+        <button type="button" className={section === "imports" ? "active" : ""} onClick={() => selectSection("imports")}>
           Imports
         </button>
       </nav>
+      )}
+
+      {section === "preview" && (
+        <ProfilePreview
+          accountName={accountName}
+          userEmail={userEmail}
+          profileForm={profileForm}
+          detailsForm={detailsForm}
+          isOrcidAccount={isOrcidAccount}
+          userOrcidId={userOrcidId}
+          onEdit={() => selectSection("basics")}
+          onAccount={onOpenAccountSettings}
+          discoveryCandidates={profileDiscoveryCandidates}
+          discoveryConfirmed={profileDiscoveryConfirmed}
+          discoveryLoading={profileDiscoveryLoading}
+          onDiscover={onDiscoverProfileCandidates}
+          onApplyCandidate={onApplyProfileCandidate}
+          onDismissCandidate={onDismissProfileCandidate}
+        />
+      )}
 
       {section === "basics" && (
         <form className="grid-form" onSubmit={onSaveProfile}>
@@ -179,6 +234,8 @@ export function ProfileView({
           orcidForm={orcidForm}
           openAlexForm={openAlexForm}
           openAlexPreview={openAlexPreview}
+          isOrcidAccount={isOrcidAccount}
+          userOrcidId={userOrcidId}
           onOrcidChange={onOrcidChange}
           onOpenAlexChange={onOpenAlexChange}
           onImportOrcid={onImportOrcid}
@@ -188,8 +245,166 @@ export function ProfileView({
       )}
 
       <datalist id="profile-country-options">{countryOptions.map((item) => <option value={item} key={item} />)}</datalist>
+      </div>
     </section>
   );
+}
+
+function ProfilePreview({
+  accountName,
+  userEmail,
+  profileForm,
+  detailsForm,
+  isOrcidAccount,
+  userOrcidId,
+  onEdit,
+  onAccount,
+  discoveryCandidates,
+  discoveryConfirmed,
+  discoveryLoading,
+  onDiscover,
+  onApplyCandidate,
+  onDismissCandidate,
+}: {
+  accountName: string;
+  userEmail: string;
+  profileForm: ProfilePayload;
+  detailsForm: ProfileDetailsPayload;
+  isOrcidAccount: boolean;
+  userOrcidId: string | null;
+  onEdit: () => void;
+  onAccount: () => void;
+  discoveryCandidates: ProfileDiscoveryCandidate[];
+  discoveryConfirmed: ProfileDiscoveryCandidate[];
+  discoveryLoading: boolean;
+  onDiscover: () => void;
+  onApplyCandidate: (candidate: ProfileDiscoveryCandidate) => void;
+  onDismissCandidate: (candidate: ProfileDiscoveryCandidate) => void;
+}) {
+  const identity = [
+    profileForm.career_stage ? label(profileForm.career_stage) : "",
+    profileForm.country,
+    isOrcidAccount && userOrcidId ? `ORCID ${userOrcidId}` : "",
+  ].filter(Boolean);
+  return (
+    <div className="profile-preview">
+      <article className="profile-preview-hero">
+        <div>
+          <p className="eyebrow">{isOrcidAccount ? "ORCID-linked researcher" : "Researcher profile"}</p>
+          <h3>{accountName || "Unnamed researcher"}</h3>
+          <p>{userEmail}</p>
+          <div className="chips">
+            {identity.map((item) => (
+              <span key={item}>{item}</span>
+            ))}
+          </div>
+        </div>
+        <div className="actions">
+          <button className="primary" type="button" onClick={onEdit}>
+            Edit profile
+          </button>
+          <button className="secondary" type="button" onClick={onAccount}>
+            Account settings
+          </button>
+        </div>
+      </article>
+      <div className="profile-preview-grid">
+        <PreviewCard title="Disciplines" values={profileForm.disciplines} empty="Add disciplines to improve topic matching." />
+        <PreviewCard title="Keywords" values={profileForm.keywords} empty="Add keywords to tune search and recommendations." />
+        <PreviewCard title="Languages and degrees" values={[...detailsForm.languages, ...detailsForm.degrees]} empty="Add languages and degrees for eligibility checks." />
+        <PreviewCard title="Research summary" values={detailsForm.research_summary ? [detailsForm.research_summary] : []} empty="Add a short summary so the assistant can personalize advice." variant="full" />
+        <PreviewCard title="Funding preferences" values={detailsForm.funding_interests} empty="Add funding interests to guide recommendations." />
+        <PreviewCard title="Publications" values={detailsForm.publications} empty="Import or add publications to strengthen readiness scoring." variant="wide" />
+      </div>
+      <section className="profile-discovery">
+        <div>
+          <div>
+            <span>Public profile discovery</span>
+            <strong>Find public evidence</strong>
+            <p>Search for researcher pages that may enrich your summary, disciplines, keywords, publications, degrees, languages, funding interests, and profile embedding after you confirm a result.</p>
+          </div>
+          <HelpTip text="Nothing is imported automatically. Confirming a source lets the system parse the page, extract useful academic metadata, and refresh the profile embedding used by recommendations." />
+          <button className="secondary" type="button" disabled={discoveryLoading} onClick={onDiscover}>
+            {discoveryLoading ? "Searching..." : "Find public profile"}
+          </button>
+        </div>
+        {discoveryCandidates.length > 0 ? (
+          <div className="profile-discovery-list">
+            {discoveryCandidates.map((candidate) => (
+              <article key={candidate.url}>
+                <div>
+                  <a href={candidate.url} target="_blank" rel="noreferrer">
+                    <strong>{candidate.title}</strong>
+                  </a>
+                  <span>{candidate.source} - {candidate.confidence}% confidence</span>
+                  <p>{candidate.snippet}</p>
+                </div>
+                <div className="actions">
+                  <button className="primary icon-choice" type="button" title="Yes, enrich my profile from this source" onClick={() => onApplyCandidate(candidate)}>
+                    Yes
+                  </button>
+                  <button className="secondary icon-choice" type="button" title="No, hide this suggestion" onClick={() => onDismissCandidate(candidate)}>
+                    No
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="muted">Search DuckDuckGo for public researcher pages, then confirm before anything is merged into your profile.</p>
+        )}
+      </section>
+      {discoveryConfirmed.length > 0 && (
+        <section className="profile-discovery profile-discovery-confirmed">
+          <div>
+            <div>
+              <span>Confirmed public sources</span>
+              <strong>Reviewed links</strong>
+              <p>These links were confirmed and will not appear again as suggestions for this profile.</p>
+            </div>
+          </div>
+          <div className="profile-discovery-list">
+            {discoveryConfirmed.map((candidate) => (
+              <article key={candidate.url}>
+                <div>
+                  <a href={candidate.url} target="_blank" rel="noreferrer">
+                    <strong>{candidate.title}</strong>
+                  </a>
+                  <span>{candidate.source}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function PreviewCard({ title, values, empty, variant = "normal" }: { title: string; values: string[]; empty: string; variant?: "normal" | "wide" | "full" }) {
+  const visible = values.filter(Boolean).slice(0, variant === "full" ? 2 : 6);
+  return (
+    <article className={`profile-preview-card profile-preview-card-${variant}`}>
+      <span>{title}</span>
+      {visible.length ? (
+        variant === "full" ? (
+          <p>{visible.join(" ")}</p>
+        ) : (
+          <div className="chips">
+            {visible.map((value) => (
+              <span key={value}>{value}</span>
+            ))}
+          </div>
+        )
+      ) : (
+        <p className="muted">{empty}</p>
+      )}
+    </article>
+  );
+}
+
+function sectionFromHash(): ProfileSection {
+  return "preview";
 }
 
 function AcademicEvidence({ detailsForm }: { detailsForm: ProfileDetailsPayload }) {
@@ -230,6 +445,8 @@ export function ProfileImportsView({
   orcidForm,
   openAlexForm,
   openAlexPreview,
+  isOrcidAccount,
+  userOrcidId,
   onOrcidChange,
   onOpenAlexChange,
   onImportOrcid,
@@ -239,6 +456,8 @@ export function ProfileImportsView({
   orcidForm: { orcid_id: string; email: string; career_stage: CareerStage; disciplines: string; preferred_countries: string };
   openAlexForm: { openalex_author_id: string; orcid_id: string; max_works: number };
   openAlexPreview: OpenAlexPreview | null;
+  isOrcidAccount: boolean;
+  userOrcidId: string | null;
   onOrcidChange: (form: { orcid_id: string; email: string; career_stage: CareerStage; disciplines: string; preferred_countries: string }) => void;
   onOpenAlexChange: (form: { openalex_author_id: string; orcid_id: string; max_works: number }) => void;
   onImportOrcid: (event: FormEvent) => void;
@@ -254,8 +473,8 @@ export function ProfileImportsView({
         </div>
       </div>
       <form className="grid-form" onSubmit={onImportOrcid}>
-        <Field labelText="ORCID iD" value={orcidForm.orcid_id} onChange={(orcid_id) => onOrcidChange({ ...orcidForm, orcid_id })} placeholder="0000-0000-0000-0000" />
-        <Field labelText="Email" value={orcidForm.email} onChange={(email) => onOrcidChange({ ...orcidForm, email })} />
+        <Field labelText="ORCID iD" value={userOrcidId || orcidForm.orcid_id} disabled={isOrcidAccount} onChange={(orcid_id) => onOrcidChange({ ...orcidForm, orcid_id })} placeholder="0000-0000-0000-0000" />
+        <Field labelText="Email" value={orcidForm.email} disabled={isOrcidAccount} onChange={(email) => onOrcidChange({ ...orcidForm, email })} />
         <SelectField labelText="Career stage" value={orcidForm.career_stage} options={careerStages} onChange={(career_stage) => onOrcidChange({ ...orcidForm, career_stage })} />
         <Field labelText="Disciplines" value={orcidForm.disciplines} onChange={(disciplines) => onOrcidChange({ ...orcidForm, disciplines })} />
         <Field labelText="Preferred countries" value={orcidForm.preferred_countries} onChange={(preferred_countries) => onOrcidChange({ ...orcidForm, preferred_countries })} />

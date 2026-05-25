@@ -1,6 +1,6 @@
 import type React from "react";
 import type { OpportunityStatus, Recommendation } from "../../types";
-import { label, opportunitySummary } from "../../utils/format";
+import { addedLabel, deadlineLabel, label, opportunitySummary } from "../../utils/format";
 
 export function OpportunityCard({
   item,
@@ -32,14 +32,15 @@ export function OpportunityCard({
     <article className="opportunity-card clickable-card" role="button" tabIndex={0} onClick={onSelect} onKeyDown={handleCardKeyDown}>
       <div className="card-head">
         <span className={item.match_score ? "score" : "score score-muted"}>{item.match_score ? `${item.match_score}% match` : "Catalog"}</span>
-        <span className="deadline-pill">{item.opportunity.deadline ?? "No deadline"}</span>
+        <span className="date-pill deadline-pill"><small>Deadline</small>{deadlineLabel(item.opportunity.deadline).replace(/^Due\s/, "")}</span>
       </div>
+      <span className="added-pill">{addedLabel(item.opportunity.created_at)}</span>
       <h3>{item.opportunity.title}</h3>
       <p className="card-summary">{opportunitySummary(item.opportunity)}</p>
       <div className="chips">
         <span>{label(item.opportunity.opportunity_type)}</span>
         <span>{item.opportunity.source}</span>
-        {item.user_status && <span className={`status-chip status-${item.user_status}`}>{label(item.user_status)}</span>}
+        {canTrack && <span className={`status-chip status-${item.user_status ?? "browsing"}`}>{label(item.user_status ?? "browsing")}</span>}
       </div>
       {topReasons.length > 0 && (
         <ul className="reasons">

@@ -69,7 +69,7 @@ describe("FeedView", () => {
     expect(screen.getByLabelText(/Keyword search uses Elasticsearch/)).toBeInTheDocument();
     expect(screen.getByText("Browse research opportunities, compare fit, and move promising items into your application workflow.")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("AI, biology, mobility...")).toBeInTheDocument();
-    expect(screen.getByLabelText("Sort")).toHaveValue("deadline");
+    expect(screen.getByLabelText("Sort matches")).toHaveTextContent("Deadline");
     expect(screen.getByRole("button", { name: "Filters active: 0" })).toBeInTheDocument();
     expect(screen.queryByText("Active only")).not.toBeInTheDocument();
     expect(screen.getByText("Climate Mobility Grant")).toBeInTheDocument();
@@ -83,7 +83,8 @@ describe("FeedView", () => {
     const props = renderFeed();
 
     await user.type(screen.getByPlaceholderText("AI, biology, mobility..."), "climate,");
-    await user.selectOptions(screen.getByLabelText("Sort"), "created_at");
+    await user.click(screen.getByLabelText("Sort matches"));
+    await user.click(screen.getByRole("option", { name: "Newest added" }));
     await user.click(screen.getByRole("button", { name: /sort descending/i }));
     await user.click(screen.getByRole("button", { name: "Filters active: 0" }));
     await user.click(screen.getByRole("button", { name: "Clear filters" }));

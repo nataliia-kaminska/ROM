@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -102,8 +102,8 @@ describe("OpportunityDetailsView", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("Opportunity status"), { target: { value: "1" } });
     const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /planned/i }));
     await user.click(screen.getByRole("button", { name: "Generate advisor memo" }));
 
     expect(onStatus).toHaveBeenCalledWith(21, "planned");

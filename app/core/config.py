@@ -87,6 +87,9 @@ class Settings(BaseSettings):
     profile_enrichment_model: str = ""
     profile_enrichment_max_works: int = 20
     profile_enrichment_timeout_seconds: int = 20
+    profile_discovery_enabled: bool = True
+    profile_discovery_max_results: int = 3
+    profile_discovery_page_max_chars: int = 12000
     external_source_allowed_hosts: list[str] = []
     external_source_max_bytes: int = 2_000_000
     external_source_resolve_hosts: bool = True

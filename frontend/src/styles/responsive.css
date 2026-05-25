@@ -42,7 +42,7 @@
   }
 
   .board {
-    grid-template-columns: repeat(3, minmax(190px, 1fr));
+    grid-template-columns: repeat(6, minmax(210px, 1fr));
   }
 }
 
@@ -61,6 +61,9 @@
   }
 
   .grid-form,
+  .page-header,
+  .profile-preview-grid,
+  .account-settings-side,
   .assistant-board,
   .assistant-focus-grid,
   .assistant-insight-grid,
@@ -84,10 +87,35 @@
     grid-template-columns: 1fr;
   }
 
+  .page-header,
+  .filter-actions-row,
+  .notification-layout,
+  .detail-main-panels,
+  .dashboard-strongest .compact-cards,
+  .reminder-node,
+  .notification-item {
+    grid-template-columns: 1fr;
+  }
+
+  .page-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .dashboard-grid > .span-2,
   .next-action,
+  .dashboard-pipeline,
+  .dashboard-deadlines,
   .detail-main,
   .detail-side {
+    grid-column: auto;
+  }
+
+  .dashboard-mini-board {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-preview-card-large {
     grid-column: auto;
   }
 
@@ -97,6 +125,10 @@
   }
 
   .fit-compass {
+    grid-template-columns: 1fr;
+  }
+
+  .status-stage-picker > div {
     grid-template-columns: 1fr;
   }
 
@@ -116,7 +148,14 @@
     position: static;
   }
 
+  .memo-copy-block {
+    grid-template-columns: 1fr;
+  }
+
   .topbar,
+  .profile-preview-hero,
+  .profile-discovery > div:first-child,
+  .profile-discovery-list article,
   .assistant-hero,
   .section-title,
   .about-hero,
@@ -127,7 +166,7 @@
   }
 
   .board {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(6, minmax(210px, 1fr));
   }
 
   .toast-stack {

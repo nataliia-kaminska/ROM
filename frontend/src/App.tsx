@@ -104,6 +104,7 @@ function App() {
     profiles,
     recommendations: workspace.recommendations,
     opportunities: workspace.opportunities,
+    trackedOpportunities: workspace.trackedOpportunities,
     selectedOpportunity: workspace.selectedOpportunity,
     statuses: workspace.statuses,
     reminders: workspace.reminders,
@@ -127,7 +128,26 @@ function App() {
   }, [guestMode, token, user, view]);
 
   useEffect(() => {
-    const workspaceViews = new Set(["dashboard", "feed", "board", "assistant", "reminders", "opportunity"]);
+    const publicUnauthenticatedViews = new Set(["auth", "verify_email", "orcid_callback", "about", "opportunity"]);
+    if (!token && !user && !guestMode && !publicUnauthenticatedViews.has(view)) {
+      navigateTo("auth", true);
+    }
+  }, [guestMode, navigateTo, token, user, view]);
+
+  useEffect(() => {
+    if (view === "auth" && guestMode) {
+      setGuestMode(false);
+    }
+  }, [guestMode, view]);
+
+  useEffect(() => {
+    if (view === "auth" && token && user) {
+      navigateTo("dashboard", true);
+    }
+  }, [navigateTo, token, user, view]);
+
+  useEffect(() => {
+    const workspaceViews = new Set(["dashboard", "feed", "profile", "account", "board", "assistant", "reminders", "opportunity"]);
     if ((token || guestMode) && workspaceViews.has(view)) {
       void workspace.refreshWorkspace(activeProfile, workspace.filters, 1);
     }
@@ -179,6 +199,7 @@ function App() {
     setGuestMode(false);
     logout();
     workspace.clearWorkspace();
+    navigateTo("auth", true);
   }
 
   function enterGuestMode() {
@@ -211,7 +232,7 @@ function App() {
   }
 
   return (
-    <AppShell
+      <AppShell
       user={user}
       isGuest={guestMode}
       activeProfile={activeProfile}
@@ -221,6 +242,7 @@ function App() {
       notice={notice}
       error={error}
       onViewChange={navigateTo}
+      onAccountSettings={() => navigateTo("account")}
       onLogout={handleLogout}
     >
       <WorkspaceRoutes
@@ -262,23 +284,38 @@ function App() {
         profile={{
           userEmail: user?.email ?? "",
           userFullName: user?.full_name ?? "",
+          userAuthProvider: user?.auth_provider ?? "local",
+          userOrcidId: user?.orcid_id ?? null,
+          passwordLoginEnabled: Boolean(user?.password_login_enabled),
           loading,
           profileForm: profile.profileForm,
           detailsForm: profile.detailsForm,
+          accountForm: profile.accountForm,
+          passwordForm: profile.passwordForm,
           orcidForm: profile.orcidForm,
           openAlexForm: profile.openAlexForm,
           openAlexPreview: profile.openAlexPreview,
+          profileDiscoveryCandidates: profile.profileDiscoveryCandidates,
+          profileDiscoveryConfirmed: profile.profileDiscoveryConfirmed,
+          profileDiscoveryLoading: profile.profileDiscoveryLoading,
           onProfileChange: profile.setProfileForm,
           onDetailsChange: profile.setDetailsForm,
+          onAccountChange: profile.setAccountForm,
+          onPasswordChange: profile.setPasswordForm,
           onLoadDetails: () => void profile.loadDetails(),
           highlightFields: profileHighlights,
           onSaveProfile: profile.saveProfile,
           onSaveDetails: profile.saveDetails,
+          onSaveAccount: profile.saveAccount,
+          onSavePassword: profile.savePassword,
           onOrcidChange: profile.setOrcidForm,
           onOpenAlexChange: profile.setOpenAlexForm,
           onImportOrcid: profile.importOrcid,
           onImportOpenAlex: profile.importOpenAlex,
           onPreviewOpenAlex: profile.previewOpenAlex,
+          onDiscoverProfileCandidates: () => void profile.discoverProfileCandidates(),
+          onApplyProfileCandidate: (candidate) => void profile.applyProfileCandidate(candidate),
+          onDismissProfileCandidate: profile.dismissProfileCandidate,
         }}
         notifications={{
           notifications: notifications.notifications,

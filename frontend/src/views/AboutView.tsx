@@ -1,8 +1,14 @@
 import type { View } from "../constants";
+import { PageHeader } from "../components/ui";
 
 export function AboutView({ isSignedIn, onViewChange }: { isSignedIn: boolean; onViewChange: (view: View) => void }) {
   return (
-    <section className="panel about-page">
+    <section className="about-page">
+      <PageHeader
+        title="How it works"
+        description="A practical overview of how the matcher collects opportunities, builds your profile context, ranks results, and helps prepare applications."
+        hint="This page is public. Guests can use it to understand the system before creating a profile."
+      />
       <div className="about-hero">
         <div>
           <p className="eyebrow">Research Opportunity Matcher</p>

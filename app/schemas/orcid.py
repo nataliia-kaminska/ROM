@@ -14,6 +14,7 @@ class OrcidImportRequest(BaseModel):
 
 class OrcidImportPreview(BaseModel):
     full_name: str
+    email: str | None = None
     country: str | None = None
     keywords: list[str]
     google_scholar_url: str | None = None

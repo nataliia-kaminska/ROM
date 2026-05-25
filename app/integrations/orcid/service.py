@@ -30,7 +30,7 @@ def import_orcid_profile(
         profile = ResearcherProfile(
             user_id=current_user.id if current_user else None,
             full_name=extracted["full_name"],
-            email=payload.email,
+            email=payload.email or extracted["email"],
             career_stage=payload.career_stage,
             country=extracted["country"],
             disciplines=pack_list(payload.disciplines),
@@ -66,6 +66,7 @@ def import_orcid_profile(
 
     preview = OrcidImportPreview(
         full_name=extracted["full_name"],
+        email=extracted["email"],
         country=extracted["country"],
         keywords=extracted["keywords"],
         google_scholar_url=extracted["google_scholar_url"],

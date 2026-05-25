@@ -11,15 +11,18 @@ from app.core.security import create_access_token, hash_password, hash_token, ve
 from app.core.config import settings
 from app.db.models import ResearcherProfile, User
 from app.db.session import get_db
+from app.integrations.orcid.client import OrcidClient
+from app.integrations.orcid.mapper import extract_profile_payload
 from app.integrations.orcid.service import import_orcid_profile as import_orcid_profile_service
 from app.schemas.orcid import OrcidImportRequest
-from app.schemas.auth import AuthProviderConfigRead, TokenRead, UserLogin, UserRead, UserRegister, UserRegisterRead, UserVerifyEmail
+from app.schemas.auth import AuthProviderConfigRead, TokenRead, UserAccountUpdate, UserLogin, UserPasswordChange, UserRead, UserRegister, UserRegisterRead, UserVerifyEmail
 from app.services.email_verification import issue_email_verification, send_verification_email, verify_email_token
 from app.services.orcid_oauth import (
     OrcidOAuthError,
     build_authorization_url,
     create_orcid_state,
     display_name_from_token,
+    email_from_token,
     exchange_authorization_code,
     orcid_placeholder_email,
     validate_orcid_state,
@@ -151,9 +154,10 @@ def complete_orcid_sign_in(
         return _redirect_to_frontend_error(str(exc))
 
     orcid_id = str(token_payload["orcid"])
+    preferred_email = email_from_token(token_payload) or _public_orcid_email(orcid_id)
     user = db.query(User).filter(User.orcid_id == orcid_id).first()
     if user is None:
-        email = _unique_orcid_email(db, orcid_id)
+        email = _unique_orcid_email(db, orcid_id, preferred_email)
         user = User(
             email=email,
             hashed_password="",
@@ -191,8 +195,51 @@ def read_me(current_user: User = Depends(get_current_user)) -> UserRead:
     return current_user
 
 
-def _unique_orcid_email(db: Session, orcid_id: str) -> str:
-    email = orcid_placeholder_email(orcid_id)
+@router.put("/me", response_model=UserRead, dependencies=[Depends(rate_limit("auth_update_me"))])
+def update_me(
+    payload: UserAccountUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserRead:
+    if current_user.auth_provider == "orcid":
+        raise HTTPException(status_code=403, detail="Name and email are managed by ORCID for this account")
+    next_email = payload.email.lower()
+    existing = db.query(User).filter(User.email == next_email, User.id != current_user.id).first()
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="User with this email already exists")
+    email_changed = next_email != current_user.email
+    current_user.full_name = payload.full_name
+    current_user.email = next_email
+    for profile in db.query(ResearcherProfile).filter(ResearcherProfile.user_id == current_user.id).all():
+        profile.full_name = payload.full_name
+        profile.email = next_email
+    if email_changed and settings.email_verification_required:
+        current_user.email_verified = False
+        verification_token = issue_email_verification(current_user)
+        send_verification_email(current_user, verification_token)
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@router.put("/password", response_model=UserRead, dependencies=[Depends(rate_limit("auth_update_password"))])
+def update_password(
+    payload: UserPasswordChange,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserRead:
+    if not current_user.password_login_enabled:
+        raise HTTPException(status_code=403, detail="Password login is disabled for this account")
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    current_user.hashed_password = hash_password(payload.new_password)
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+def _unique_orcid_email(db: Session, orcid_id: str, preferred_email: str | None = None) -> str:
+    email = (preferred_email or orcid_placeholder_email(orcid_id)).lower()
     if db.query(User).filter(User.email == email).first() is None:
         return email
     suffix = 2
@@ -201,6 +248,16 @@ def _unique_orcid_email(db: Session, orcid_id: str) -> str:
         if db.query(User).filter(User.email == candidate).first() is None:
             return candidate
         suffix += 1
+
+
+def _public_orcid_email(orcid_id: str) -> str | None:
+    try:
+        record = OrcidClient().read_public_record(orcid_id)
+        extracted = extract_profile_payload(orcid_id, record)
+        return extracted.get("email")
+    except Exception:
+        logger.info("ORCID public record did not provide an email or could not be read orcid_id=%s", orcid_id)
+        return None
 
 
 def _ensure_orcid_profile(db: Session, user: User, orcid_id: str) -> None:

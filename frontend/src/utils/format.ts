@@ -1,4 +1,4 @@
-import type { Opportunity, OpportunityStatus, Profile } from "../types";
+import type { DisplayOpportunityStatus, Opportunity, Profile } from "../types";
 import type { View } from "../constants";
 
 export function splitList(value: string): string[] {
@@ -16,11 +16,30 @@ export function label(value: string): string {
   return value.replaceAll("_", " ");
 }
 
+export function formatDate(value: string | null | undefined): string {
+  if (!value) return "";
+  const date = new Date(value.includes("T") ? value : `${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${day}.${month}.${date.getFullYear()}`;
+}
+
+export function deadlineLabel(value: string | null | undefined): string {
+  return value ? `Due ${formatDate(value)}` : "No deadline";
+}
+
+export function addedLabel(value: string | null | undefined): string {
+  return value ? `Added ${formatDate(value)}` : "Added date unknown";
+}
+
 export function viewLabel(value: View): string {
   const labels: Record<View, string> = {
     dashboard: "Dashboard",
+    auth: "Sign In",
     feed: "Matches",
     profile: "Profile",
+    account: "Account Settings",
     board: "Application Board",
     assistant: "Apply Assistant",
     about: "How It Works",
@@ -34,8 +53,9 @@ export function viewLabel(value: View): string {
   return labels[value];
 }
 
-export function statusHelp(status: OpportunityStatus): string {
-  const descriptions: Record<OpportunityStatus, string> = {
+export function statusHelp(status: DisplayOpportunityStatus): string {
+  const descriptions: Record<DisplayOpportunityStatus, string> = {
+    browsing: "No action yet. You are only viewing this opportunity.",
     saved: "Interesting, maybe later.",
     planned: "You intend to apply.",
     applied: "Application submitted.",

@@ -3,6 +3,7 @@ export type CareerStage = "bachelor" | "master" | "phd" | "postdoc" | "early_car
 export type OpportunityType = "grant" | "exchange" | "fellowship" | "internship" | "research_position" | "training";
 
 export type OpportunityStatus = "saved" | "ignored" | "planned" | "applied" | "rejected" | "accepted";
+export type DisplayOpportunityStatus = OpportunityStatus | "browsing";
 
 export type User = {
   id: number;
@@ -58,6 +59,21 @@ export type ProfileDetails = {
   preferred_opportunity_types: OpportunityType[];
   min_duration_months: number | null;
   max_duration_months: number | null;
+};
+
+export type ProfileDiscoveryCandidate = {
+  title: string;
+  url: string;
+  snippet: string;
+  source: string;
+  confidence: number;
+};
+
+export type ProfileDiscoveryApplyResult = {
+  profile: Profile;
+  details: ProfileDetails;
+  candidate: ProfileDiscoveryCandidate;
+  applied_fields: string[];
 };
 
 export type OpenAlexPreview = {

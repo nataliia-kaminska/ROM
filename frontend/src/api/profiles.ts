@@ -1,4 +1,4 @@
-import type { CareerStage, OpenAlexPreview, Profile, ProfileDetails } from "../types";
+import type { CareerStage, OpenAlexPreview, Profile, ProfileDetails, ProfileDiscoveryApplyResult, ProfileDiscoveryCandidate } from "../types";
 import type { ProfileDetailsPayload, ProfilePayload } from "./payloads";
 import { request } from "./client";
 
@@ -11,6 +11,10 @@ export const profilesApi = {
     request<ProfileDetails>(`/profiles/${profileId}/details`, { token }),
   saveProfileDetails: (token: string, profileId: number, body: ProfileDetailsPayload) =>
     request<ProfileDetails>(`/profiles/${profileId}/details`, { token, method: "PUT", body }),
+  discoverProfileCandidates: (token: string, profileId: number, limit = 3) =>
+    request<ProfileDiscoveryCandidate[]>(`/profiles/${profileId}/discovery`, { token, query: { limit }, timeoutMs: 45000 }),
+  applyProfileCandidate: (token: string, profileId: number, body: Pick<ProfileDiscoveryCandidate, "title" | "url" | "snippet">) =>
+    request<ProfileDiscoveryApplyResult>(`/profiles/${profileId}/discovery/apply`, { token, method: "POST", body, timeoutMs: 60000 }),
   importOrcid: (
     token: string,
     body: {

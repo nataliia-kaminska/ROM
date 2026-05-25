@@ -103,9 +103,9 @@ def deterministic_advisor_memo(facts: AdvisorFacts) -> str:
             f"- Anchor the first paragraph in {facts.profile_name}'s actual evidence ({topic_signal}) before describing broader impact.",
             "",
             "Draft snippets:",
-            f"- Opening: I am applying to {facts.opportunity_title} to develop a focused research plan grounded in {topic_signal}.",
-            f"- Fit sentence: My profile fits this call because {strongest_signal}",
-            f"- Reviewer reassurance: I will explicitly document eligibility, availability, and required evidence before submission{f', starting from this source lead: {evidence_source}' if evidence_source else ''}.",
+            f"- Opening: I am applying to {facts.opportunity_title} because my current research profile gives me a focused basis for contributing to the programme's academic aims.",
+            f"- Fit sentence: My strongest fit is the connection between my existing evidence ({strongest_signal}) and the opportunity's stated focus on {opportunity_signal}.",
+            f"- Reviewer reassurance: I will explicitly document my eligibility, availability, and required supporting evidence so the application does not rely on assumptions.",
             "",
             "Do not overclaim:",
             f"- Do not claim that {facts.profile_name} is fully eligible until country, career-stage, host, and document rules are checked on the official page.",
@@ -141,7 +141,9 @@ def _chat_completion(base_url: str, api_key: str, model: str, facts: AdvisorFact
                             "Create a compact Advisor memo from these facts. Do not repeat score counts, generic checklist wording, "
                             "or the exact next-action checklist. Focus on program-specific strategy. Include exactly these sections: "
                             "Best angle, Reviewer concerns, How to answer, Draft snippets, Do not overclaim. "
-                            "Use 2-4 bullets per section. Draft snippets must include reusable application wording, not placeholders. "
+                            "Use 2-4 bullets per section. Draft snippets must be polished first-person academic wording that the applicant can copy into a draft. "
+                            "Draft snippets must not include URLs, social-media references, source leads, search-result titles, or phrases like 'Web research'. "
+                            "You may label snippets as Opening, Fit sentence, or Reviewer reassurance, but the actual snippet text must stand alone. "
                             "Every section must mention concrete facts from this JSON: the applicant name, opportunity title, profile evidence, "
                             "opportunity requirements or call wording, warnings, or retrieved snippets. Avoid generic advice such as 'check eligibility' "
                             "unless you say exactly what should be checked and why for this applicant. If web_research exists, use it only as a cautious "

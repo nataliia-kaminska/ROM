@@ -5,8 +5,10 @@ from app.api.dependencies import ensure_profile_access, get_optional_current_use
 from app.db.session import get_db
 from app.modules.profiles.mappers import to_profile_details_read, to_profile_read
 from app.repositories import profiles as profile_repository
+from app.schemas.profile_discovery import ProfileDiscoveryApplyRequest, ProfileDiscoveryApplyResult, ProfileDiscoveryCandidate
 from app.schemas.profile_details import ResearcherProfileDetailsRead, ResearcherProfileDetailsUpsert
 from app.schemas.profiles import ResearcherProfileCreate, ResearcherProfileRead
+from app.services import profile_discovery
 from app.services import profiles as profile_service
 
 
@@ -76,3 +78,25 @@ def get_profile_details(
     if details is None:
         raise HTTPException(status_code=404, detail="Profile details not found")
     return to_profile_details_read(details)
+
+
+@router.get("/{profile_id}/discovery", response_model=list[ProfileDiscoveryCandidate])
+def discover_profile_evidence(
+    profile_id: int,
+    limit: int = 3,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_optional_current_user),
+) -> list[ProfileDiscoveryCandidate]:
+    profile = ensure_profile_access(profile_repository.get_profile(db, profile_id), current_user)
+    return profile_discovery.discover_profile_candidates(profile, limit)
+
+
+@router.post("/{profile_id}/discovery/apply", response_model=ProfileDiscoveryApplyResult)
+def apply_profile_evidence(
+    profile_id: int,
+    payload: ProfileDiscoveryApplyRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_optional_current_user),
+) -> ProfileDiscoveryApplyResult:
+    profile = ensure_profile_access(profile_repository.get_profile(db, profile_id), current_user)
+    return profile_discovery.apply_profile_candidate(db, profile, payload)

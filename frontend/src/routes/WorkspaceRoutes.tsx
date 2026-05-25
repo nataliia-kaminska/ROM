@@ -1,5 +1,6 @@
 import { AdminView } from "../views/AdminView";
 import { AboutView } from "../views/AboutView";
+import { AccountSettingsView } from "../views/AccountSettingsView";
 import { AssistantView } from "../views/AssistantView";
 import { BoardView } from "../views/BoardView";
 import { DashboardView } from "../views/DashboardView";
@@ -28,6 +29,8 @@ export function WorkspaceRoutes({
   admin: AdminController;
 }) {
   switch (route.view) {
+    case "auth":
+      return null;
     case "verify_email":
       return <VerifyEmailView onViewChange={route.onViewChange} />;
     case "orcid_callback":
@@ -96,6 +99,8 @@ export function WorkspaceRoutes({
         <ProfileView
           userEmail={profile.userEmail}
           userFullName={profile.userFullName}
+          userAuthProvider={profile.userAuthProvider}
+          userOrcidId={profile.userOrcidId}
           activeProfileExists={Boolean(workspace.activeProfile)}
           loading={profile.loading}
           profileForm={profile.profileForm}
@@ -106,10 +111,12 @@ export function WorkspaceRoutes({
           orcidForm={profile.orcidForm}
           openAlexForm={profile.openAlexForm}
           openAlexPreview={profile.openAlexPreview}
+          profileDiscoveryCandidates={profile.profileDiscoveryCandidates}
+          profileDiscoveryConfirmed={profile.profileDiscoveryConfirmed}
+          profileDiscoveryLoading={profile.profileDiscoveryLoading}
           highlightFields={profile.highlightFields}
           onProfileChange={profile.onProfileChange}
           onDetailsChange={profile.onDetailsChange}
-          onLoadDetails={profile.onLoadDetails}
           onSaveProfile={profile.onSaveProfile}
           onSaveDetails={profile.onSaveDetails}
           onOrcidChange={profile.onOrcidChange}
@@ -117,6 +124,31 @@ export function WorkspaceRoutes({
           onImportOrcid={profile.onImportOrcid}
           onImportOpenAlex={profile.onImportOpenAlex}
           onPreviewOpenAlex={profile.onPreviewOpenAlex}
+          onDiscoverProfileCandidates={profile.onDiscoverProfileCandidates}
+          onApplyProfileCandidate={profile.onApplyProfileCandidate}
+          onDismissProfileCandidate={profile.onDismissProfileCandidate}
+          onOpenAccountSettings={() => route.onViewChange("account")}
+        />
+      );
+    case "account":
+      return (
+        <AccountSettingsView
+          accountForm={profile.accountForm}
+          passwordForm={profile.passwordForm}
+          loading={profile.loading}
+          userAuthProvider={profile.userAuthProvider}
+          userOrcidId={profile.userOrcidId}
+          passwordLoginEnabled={profile.passwordLoginEnabled}
+          notifications={notifications.notifications}
+          notificationPrefs={notifications.notificationPrefs}
+          onAccountChange={profile.onAccountChange}
+          onPasswordChange={profile.onPasswordChange}
+          onSaveAccount={profile.onSaveAccount}
+          onSavePassword={profile.onSavePassword}
+          onPrefsChange={notifications.onPrefsChange}
+          onSavePrefs={notifications.onSavePrefs}
+          onUnsubscribe={notifications.onUnsubscribe}
+          onMarkRead={notifications.onMarkRead}
         />
       );
     case "board":

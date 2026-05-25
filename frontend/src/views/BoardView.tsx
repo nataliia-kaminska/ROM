@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { Opportunity, OpportunityStatus, StatusRecord } from "../types";
 import { trackedStatuses } from "../constants";
-import { label, statusHelp } from "../utils/format";
+import { deadlineLabel, label, statusHelp } from "../utils/format";
+import { PageHeader } from "../components/ui";
 
 export function BoardView({
   statuses,
@@ -17,6 +18,7 @@ export function BoardView({
   const [dragged, setDragged] = useState<{ opportunityId: number; status: OpportunityStatus } | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<OpportunityStatus | null>(null);
   const [suppressClick, setSuppressClick] = useState(false);
+  const currentStatuses = latestStatusesByOpportunity(statuses);
 
   function handleDrop(nextStatus: OpportunityStatus) {
     if (!dragged) return;
@@ -28,10 +30,16 @@ export function BoardView({
   }
 
   return (
-    <section className="board">
+    <section className="board-page">
+      <PageHeader
+        title="Application board"
+        description="Move saved opportunities through planning, submission, and final outcomes."
+        hint="Drag cards between columns or click a card to inspect details before changing status."
+      />
+      <div className="board">
       {trackedStatuses.map((status: OpportunityStatus) => (
         <div
-          className={`lane ${dragOverStatus === status ? "lane-drop-target" : ""}`}
+          className={`lane lane-${status} ${dragOverStatus === status ? "lane-drop-target" : ""}`}
           key={status}
           onDragOver={(event) => {
             event.preventDefault();
@@ -54,7 +62,7 @@ export function BoardView({
             <h2>{label(status)}</h2>
             <small>{statusHelp(status)}</small>
           </div>
-          {statuses
+          {currentStatuses
             .filter((record) => record.status === status)
             .map((record) => opportunitiesById.get(record.opportunity_id))
             .filter(Boolean)
@@ -80,11 +88,23 @@ export function BoardView({
                 }}
               >
                 <strong>{opportunity!.title}</strong>
-                <small>{opportunity!.deadline ?? "No deadline"}</small>
+                <small>{deadlineLabel(opportunity!.deadline)}</small>
               </article>
             ))}
         </div>
       ))}
+      </div>
     </section>
   );
+}
+
+function latestStatusesByOpportunity(statuses: StatusRecord[]): StatusRecord[] {
+  const byOpportunity = new Map<number, StatusRecord>();
+  for (const status of statuses) {
+    const current = byOpportunity.get(status.opportunity_id);
+    if (!current || status.id > current.id) {
+      byOpportunity.set(status.opportunity_id, status);
+    }
+  }
+  return [...byOpportunity.values()];
 }

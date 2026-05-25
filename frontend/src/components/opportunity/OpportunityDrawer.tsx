@@ -1,6 +1,8 @@
 import type { View } from "../../constants";
-import type { ApplicationAssistantResult, Opportunity, OpportunityStatus, Recommendation, Reminder, StatusRecord } from "../../types";
-import { label, opportunitySummary } from "../../utils/format";
+import { displayStatuses } from "../../constants";
+import type { ApplicationAssistantResult, DisplayOpportunityStatus, Opportunity, Recommendation, Reminder, StatusRecord } from "../../types";
+import { CustomSelect } from "../ui";
+import { addedLabel, deadlineLabel, label, opportunitySummary } from "../../utils/format";
 import { ScoreBreakdown } from "./ScoreBreakdown";
 
 export function OpportunityDrawer({
@@ -25,7 +27,7 @@ export function OpportunityDrawer({
   statusByOpportunity: ReadonlyMap<number, StatusRecord>;
   canTrack: boolean;
   onClose: () => void;
-  onStatus: (opportunityId: number, status: OpportunityStatus) => void;
+  onStatus: (opportunityId: number, status: DisplayOpportunityStatus) => void;
   setAssistantForm: (form: { opportunity_id: string }) => void;
   setView: (view: View) => void;
   onOpenFullDetails: (opportunityId: number) => void;
@@ -33,6 +35,7 @@ export function OpportunityDrawer({
   const topReasons = selectedRecommendation?.reasons.slice(0, 3) ?? [];
   const currentStatus = statusByOpportunity.get(selectedOpportunity.id);
   const currentAssistant = assistantResult?.opportunity_id === selectedOpportunity.id ? assistantResult : null;
+  const nearestReminder = [...selectedOpportunityReminders].sort((a, b) => a.remind_on.localeCompare(b.remind_on))[0] ?? null;
 
   return (
     <div className="drawer" role="dialog" aria-modal="true" onClick={onClose}>
@@ -44,8 +47,9 @@ export function OpportunityDrawer({
         <h2>{selectedOpportunity.title}</h2>
         <div className="meta">
           <span>{label(selectedOpportunity.opportunity_type)}</span>
-          <span>{selectedOpportunity.deadline ?? "No deadline"}</span>
-          {currentStatus && <span>{label(currentStatus.status)}</span>}
+          <span>{deadlineLabel(selectedOpportunity.deadline)}</span>
+          <span>{addedLabel(selectedOpportunity.created_at)}</span>
+          {currentStatus && <span className={`status-chip status-${currentStatus.status}`}>{label(currentStatus.status)}</span>}
         </div>
         <p>{opportunitySummary(selectedOpportunity)}</p>
         {selectedRecommendation && (
@@ -61,41 +65,48 @@ export function OpportunityDrawer({
             ))}
           </ul>
         )}
-        <div className="actions">
-          {canTrack ? (
-            <>
-              <button className="secondary" type="button" onClick={() => onStatus(selectedOpportunity.id, "saved")}>
-                Save
-              </button>
-              <button className="tertiary" type="button" onClick={() => onStatus(selectedOpportunity.id, "ignored")}>
-                Ignore
-              </button>
-            </>
-          ) : (
-            <span className="card-action-note">Sign in to save or plan</span>
-          )}
+        <div className="actions drawer-primary-actions">
+          {!canTrack && <span className="card-action-note">Sign in to save or plan</span>}
           <button className="primary" type="button" onClick={() => onOpenFullDetails(selectedOpportunity.id)}>
             View full details
           </button>
+          <a className="secondary" href={selectedOpportunity.url} target="_blank" rel="noreferrer">
+            Open source
+          </a>
         </div>
+        {canTrack && (
+          <div className="drawer-status-select">
+            <span>Status</span>
+            <CustomSelect
+              value={currentStatus?.status ?? "browsing"}
+              ariaLabel="Opportunity status"
+              options={displayStatuses.map((status) => ({ value: status, label: label(status) }))}
+              onChange={(status: DisplayOpportunityStatus) => onStatus(selectedOpportunity.id, status)}
+            />
+          </div>
+        )}
         <div className="quick-drawer-foot">
-          {currentAssistant ? <span>{currentAssistant.readiness_score}% advisor readiness</span> : <span>{canTrack ? selectedStatusIds.has(selectedOpportunity.id) ? "Assistant ready from Apply Assistant" : "Save to unlock advisor planning" : "Create an account for personalized planning"}</span>}
-          {selectedOpportunityReminders.length > 0 && <span>{selectedOpportunityReminders.length} reminder{selectedOpportunityReminders.length === 1 ? "" : "s"}</span>}
-          <button
-            className="tertiary"
-            disabled={!selectedStatusIds.has(selectedOpportunity.id)}
-            onClick={() => {
-              setAssistantForm({ opportunity_id: String(selectedOpportunity.id) });
-              setView("assistant");
-              onClose();
-            }}
-          >
-            Open assistant
-          </button>
+          <div>
+            <span>{currentAssistant ? `${currentAssistant.readiness_score}% advisor readiness` : canTrack ? selectedStatusIds.has(selectedOpportunity.id) ? "Apply assistant is ready" : "Save to unlock advisor planning" : "Create an account for personalized planning"}</span>
+            <button
+              className="primary assistant-drawer-button"
+              disabled={!selectedStatusIds.has(selectedOpportunity.id)}
+              onClick={() => {
+                setAssistantForm({ opportunity_id: String(selectedOpportunity.id) });
+                setView("assistant");
+                onClose();
+              }}
+            >
+              Plan with assistant
+            </button>
+          </div>
+          {nearestReminder && (
+            <div>
+              <span>{selectedOpportunityReminders.length} reminder{selectedOpportunityReminders.length === 1 ? "" : "s"}</span>
+              <strong>{nearestReminder.remind_on}</strong>
+            </div>
+          )}
         </div>
-        <a className="secondary link-button" href={selectedOpportunity.url} target="_blank" rel="noreferrer">
-          Open source
-        </a>
         {!currentStatus && (
           <p className="muted">Click the card title area for a quick check, then open full details when it looks worth deeper review.</p>
         )}

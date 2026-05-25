@@ -27,7 +27,7 @@ class OpenAlexClient:
     def read_works(self, author_id: str, limit: int = 10) -> list[dict[str, Any]]:
         response = self.http_client.get(
             f"{self.base_url}/works",
-            params={"filter": f"authorships.author.id:{_full_author_url(author_id)}", "per-page": limit},
+            params={"filter": f"authorships.author.id:{_full_author_url(author_id)}", "per-page": limit, "sort": "publication_date:desc"},
         )
         response.raise_for_status()
         body = response.json()
